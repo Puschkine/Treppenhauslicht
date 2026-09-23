@@ -7,51 +7,398 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #f4f6f8;
+        --bg: #f3efe7;
         --card: #ffffff;
-        --text: #1d2a35;
-        --accent: #0f766e;
+        --text: #1f1a14;
+        --accent: #7b341e;
+        --accent-2: #c05621;
+        --muted: #6b5f52;
       }
       body {
         margin: 0;
-        font-family: "Segoe UI", Tahoma, sans-serif;
-        background: var(--bg);
+        font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+        background: radial-gradient(circle at 10% 10%, #fff6e8 0%, var(--bg) 45%, #e6dccf 100%);
         color: var(--text);
       }
       .wrap {
-        max-width: 760px;
-        margin: 48px auto;
+        max-width: 980px;
+        margin: 28px auto;
         padding: 0 16px;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       }
       .card {
         background: var(--card);
-        border-radius: 14px;
-        padding: 24px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: 0 10px 28px rgba(71, 46, 30, 0.12);
+        border: 1px solid #eadfce;
       }
       h1 {
+        margin: 0 0 8px;
+        font-size: 1.7rem;
+      }
+      h2 {
+        margin: 0 0 10px;
+        font-size: 1.1rem;
+      }
+      .lead {
         margin-top: 0;
-        font-size: 1.6rem;
+        color: var(--muted);
       }
-      a {
-        color: var(--accent);
-        text-decoration: none;
+      label {
+        display: block;
+        font-size: 0.9rem;
+        margin-bottom: 2px;
       }
-      code {
-        background: #ecf0f3;
-        border-radius: 6px;
-        padding: 2px 6px;
+      input, select {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #d9ccb8;
+        border-radius: 10px;
+        padding: 8px 10px;
+        margin-bottom: 10px;
+        background: #fffdf9;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .primary {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+        color: #fff;
+      }
+      .ghost {
+        background: #f8eee3;
+        color: #52290f;
+      }
+      .status {
+        font-family: Consolas, "Courier New", monospace;
+        white-space: pre-wrap;
+        background: #f8f5ef;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 0.88rem;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .debuglog {
+        font-family: Consolas, "Courier New", monospace;
+        white-space: pre-wrap;
+        background: #fffaf3;
+        border: 1px solid #ecdcc5;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 0.84rem;
+        min-height: 170px;
+        max-height: 280px;
+        overflow: auto;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+      .ok {
+        color: #0f7a35;
+      }
+      .err {
+        color: #aa1f2d;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      @media (max-width: 680px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
-        <h1>Treppenhauslicht</h1>
-        <p>Diese Seite wird aus <code>LittleFS</code> ausgeliefert.</p>
-        <p>OTA-Update: <a href="/update">/update</a></p>
-        <p>Status API: <a href="/status">/status</a></p>
+        <h1>Treppenhauslicht Steuerung</h1>
+        <p class="lead">ESP32 als zentrale Logik fuer BWM + Taster + Shelly Relais.</p>
+        <div id="saveResult" class="hint">Bereit.</div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Shelly Netzwerk</h2>
+          <label for="s102">Shelly 102 IP</label>
+          <input id="s102" placeholder="z.B. 192.168.1.102">
+
+          <label for="s103">Shelly 103 IP</label>
+          <input id="s103" placeholder="z.B. 192.168.1.103">
+
+          <label for="s104">Shelly 104 IP</label>
+          <input id="s104" placeholder="z.B. 192.168.1.104">
+
+          <div class="row">
+            <div>
+              <label for="ch103">BWM Kanal Shelly 103</label>
+              <select id="ch103"><option value="0">0</option><option value="1">1</option></select>
+            </div>
+            <div>
+              <label for="ch104">BWM Kanal Shelly 104</label>
+              <select id="ch104"><option value="0">0</option><option value="1">1</option></select>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="out103">Lampen Output Shelly 103</label>
+              <select id="out103"><option value="0">0</option><option value="1">1</option></select>
+            </div>
+            <div>
+              <label for="out104">Lampen Output Shelly 104</label>
+              <select id="out104"><option value="0">0</option><option value="1">1</option></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Logik und Zeiten</h2>
+          <label for="motionDelay">BWM Nachlauf (ms)</label>
+          <input id="motionDelay" type="number" min="100" step="100">
+
+          <label for="buttonDelay">Taster Kurzdruck Nachlauf (ms)</label>
+          <input id="buttonDelay" type="number" min="100" step="100">
+
+          <label for="eventTimeout">Plausi Timeout BWM Event (ms)</label>
+          <input id="eventTimeout" type="number" min="1000" step="1000">
+
+          <div class="row">
+            <div>
+              <label for="pollingEnabled">Shelly Polling aktiv</label>
+              <select id="pollingEnabled"><option value="true">ja</option><option value="false">nein</option></select>
+            </div>
+            <div>
+              <label for="pollingInterval">Shelly Polling Intervall (ms)</label>
+              <input id="pollingInterval" type="number" min="1000" step="500">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="espPin">ESP BWM Pin</label>
+              <input id="espPin" type="number" min="0" max="39">
+            </div>
+            <div>
+              <label for="espLedPin">ESP BWM LED Pin</label>
+              <input id="espLedPin" type="number" min="0" max="39">
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="espInvert">ESP BWM invertiert</label>
+              <select id="espInvert"><option value="false">nein</option><option value="true">ja</option></select>
+            </div>
+            <div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="windowEnabled">Zeitfenster aktiv</label>
+              <select id="windowEnabled"><option value="false">nein</option><option value="true">ja</option></select>
+            </div>
+            <div></div>
+          </div>
+
+          <div class="row">
+            <div>
+              <label for="start">BWM aktiv von</label>
+              <input id="start" type="time">
+            </div>
+            <div>
+              <label for="end">BWM aktiv bis</label>
+              <input id="end" type="time">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>NTP</h2>
+          <label for="ntp">NTP Server</label>
+          <input id="ntp" placeholder="pool.ntp.org">
+          <div class="row">
+            <div>
+              <label for="gmt">GMT Offset (Sekunden)</label>
+              <input id="gmt" type="number" step="3600">
+            </div>
+            <div>
+              <label for="dst">DST Offset (Sekunden)</label>
+              <input id="dst" type="number" step="3600">
+            </div>
+          </div>
+          <p class="hint">Mitteleuropa: GMT=3600, DST=3600</p>
+        </div>
+
+        <div class="card">
+          <h2>Status</h2>
+          <div class="status" id="statusBox">Lade...</div>
+          <div class="actions" style="margin-top:10px">
+            <button class="ghost" id="shortBtn" type="button">Kurzdruck simulieren</button>
+            <button class="ghost" id="longBtn" type="button">Langdruck simulieren</button>
+            <button class="ghost" id="offBtn" type="button">Alle AUS</button>
+          </div>
+          <p class="hint">Webhook BWM: /api/event/motion?node=103&channel=0&state=1</p>
+          <p class="hint">Webhook Taster: /api/event/button?type=short oder type=long</p>
+        </div>
+
+        <div class="card">
+          <h2>Debug Log</h2>
+          <div class="debuglog" id="logBox">Lade Debug-Ausgaben...</div>
+          <div class="actions" style="margin-top:10px">
+            <button class="ghost" id="refreshLogBtn" type="button">Log aktualisieren</button>
+            <button class="ghost" id="clearLogBtn" type="button">Log leeren</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="actions">
+          <button class="primary" id="saveBtn" type="button">Speichern</button>
+          <a href="/update">OTA Update</a>
+          <a href="/status">Raw Status</a>
+        </div>
       </div>
     </div>
+
+    <script>
+      const q = (id) => document.getElementById(id);
+
+      const toMins = (hhmm) => {
+        const [h, m] = (hhmm || "00:00").split(":").map(Number);
+        return ((h || 0) * 60 + (m || 0)) % 1440;
+      };
+
+      const minsToHHMM = (mins) => {
+        const m = ((Number(mins) || 0) + 1440) % 1440;
+        const h = String(Math.floor(m / 60)).padStart(2, "0");
+        const mm = String(m % 60).padStart(2, "0");
+        return `${h}:${mm}`;
+      };
+
+      async function loadConfig() {
+        const r = await fetch("/api/config");
+        const c = await r.json();
+
+        q("s102").value = c.shelly102Ip || "";
+        q("s103").value = c.shelly103Ip || "";
+        q("s104").value = c.shelly104Ip || "";
+        q("ch103").value = String(c.shelly103MotionChannel ?? 0);
+        q("ch104").value = String(c.shelly104MotionChannel ?? 0);
+        q("out103").value = String(c.shelly103OutputChannel ?? 0);
+        q("out104").value = String(c.shelly104OutputChannel ?? 0);
+        q("motionDelay").value = c.motionOffDelayMs ?? 60000;
+        q("buttonDelay").value = c.buttonShortOverrideMs ?? 120000;
+        q("eventTimeout").value = c.motionEventTimeoutMs ?? 180000;
+        q("pollingEnabled").value = String(c.shellyPollingEnabled ?? true);
+        q("pollingInterval").value = c.shellyPollIntervalMs ?? 5000;
+        q("espPin").value = c.espMotionPin ?? 12;
+        q("espLedPin").value = c.espMotionLedPin ?? 32;
+        q("espInvert").value = String(Boolean(c.espMotionInvert));
+        q("windowEnabled").value = String(Boolean(c.timeWindowEnabled));
+        q("start").value = c.motionStartHHMM || minsToHHMM(c.motionStartMin || 0);
+        q("end").value = c.motionEndHHMM || minsToHHMM(c.motionEndMin || 0);
+        q("ntp").value = c.ntpServer || "pool.ntp.org";
+        q("gmt").value = c.gmtOffsetSec ?? 3600;
+        q("dst").value = c.daylightOffsetSec ?? 3600;
+      }
+
+      async function loadStatus() {
+        const r = await fetch("/api/state");
+        const s = await r.json();
+        q("statusBox").textContent = JSON.stringify(s, null, 2);
+      }
+
+      async function loadLogs() {
+        const r = await fetch("/api/logs");
+        const text = await r.text();
+        q("logBox").textContent = text || "(keine Eintraege)";
+      }
+
+      async function clearLogs() {
+        await fetch("/api/logs/clear", { method: "POST" });
+        await loadLogs();
+      }
+
+      async function saveConfig() {
+        const payload = {
+          shelly102Ip: q("s102").value.trim(),
+          shelly103Ip: q("s103").value.trim(),
+          shelly104Ip: q("s104").value.trim(),
+          shelly103MotionChannel: Number(q("ch103").value),
+          shelly104MotionChannel: Number(q("ch104").value),
+          shelly103OutputChannel: Number(q("out103").value),
+          shelly104OutputChannel: Number(q("out104").value),
+          motionOffDelayMs: Number(q("motionDelay").value),
+          buttonShortOverrideMs: Number(q("buttonDelay").value),
+          motionEventTimeoutMs: Number(q("eventTimeout").value),
+          shellyPollingEnabled: q("pollingEnabled").value === "true",
+          shellyPollIntervalMs: Number(q("pollingInterval").value),
+          espMotionPin: Number(q("espPin").value),
+          espMotionLedPin: Number(q("espLedPin").value),
+          espMotionInvert: q("espInvert").value === "true",
+          timeWindowEnabled: q("windowEnabled").value === "true",
+          motionStartMin: toMins(q("start").value),
+          motionEndMin: toMins(q("end").value),
+          ntpServer: q("ntp").value.trim(),
+          gmtOffsetSec: Number(q("gmt").value),
+          daylightOffsetSec: Number(q("dst").value)
+        };
+
+        const r = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const box = q("saveResult");
+        if (r.ok) {
+          box.className = "ok";
+          box.textContent = "Gespeichert.";
+          await loadStatus();
+        } else {
+          box.className = "err";
+          box.textContent = "Speichern fehlgeschlagen.";
+        }
+      }
+
+      async function call(url, method = "GET") {
+        await fetch(url, { method });
+        await loadStatus();
+      }
+
+      q("saveBtn").addEventListener("click", saveConfig);
+      q("shortBtn").addEventListener("click", () => call("/api/event/button?type=short&source=ui"));
+      q("longBtn").addEventListener("click", () => call("/api/event/button?type=long&source=ui"));
+      q("offBtn").addEventListener("click", () => call("/api/force/off", "POST"));
+      q("refreshLogBtn").addEventListener("click", loadLogs);
+      q("clearLogBtn").addEventListener("click", clearLogs);
+
+      loadConfig().then(async () => {
+        await loadStatus();
+        await loadLogs();
+      });
+      setInterval(loadStatus, 3000);
+      setInterval(loadLogs, 2000);
+    </script>
   </body>
 </html>

@@ -7,51 +7,46 @@
 #include <ElegantOTA.h>
 #include <LittleFS.h>
 
+#include "app_config.h"
+#include "debug_log.h"
+#include "lighting_controller.h"
+#include "web_api.h"
+
 AsyncWebServer server(80);
-
-void setupRoutes()
-{
-  server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
-
-  server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String payload = "{";
-    payload += "\"ip\":\"" + WiFi.localIP().toString() + "\",";
-    payload += "\"rssi\":" + String(WiFi.RSSI()) + ",";
-    payload += "\"wifi_status\":" + String(getConnectionState());
-    payload += "}";
-    request->send(200, "application/json", payload);
-  });
-
-  server.onNotFound([](AsyncWebServerRequest *request) {
-    request->send(404, "text/plain", "Not found");
-  });
-}
+AppConfig cfg;
+LightingController controller(cfg);
 
 void setup()
 {
   Serial.begin(115200);
   delay(300);
 
-  _DetPrint(DET_LEV1, "Starte Treppenhauslicht...");
+  appLogf(APP_LOG_LEVEL, "Starte Treppenhauslicht...");
+
   initWiFi(true);
   printWifiIP();
 
   if (!LittleFS.begin(true)) {
-    _DetPrint(DET_LEV1, "LittleFS konnte nicht gemountet werden");
+    appLogf(APP_LOG_LEVEL, "LittleFS konnte nicht gemountet werden");
   } else {
-    _DetPrint(DET_LEV1, "LittleFS erfolgreich gemountet");
+    appLogf(APP_LOG_LEVEL, "LittleFS erfolgreich gemountet");
   }
 
-  setupRoutes();
+  loadConfig(cfg);
+  applyTimeConfig(cfg);
+  controller.begin();
+
+  setupRoutes(server, cfg, controller);
   ElegantOTA.begin(&server);
   server.begin();
 
-  _DetPrint(DET_LEV1, "Async Webserver gestartet auf Port 80");
-  _DetPrint(DET_LEV1, "ElegantOTA aktiv unter /update");
+  appLogf(APP_LOG_LEVEL, "Async Webserver gestartet auf Port 80");
+  appLogf(APP_LOG_LEVEL, "ElegantOTA aktiv unter /update");
 }
 
 void loop()
 {
   ElegantOTA.loop();
+  controller.loop();
   delay(10);
 }

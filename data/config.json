@@ -1,0 +1,23 @@
+{
+  "shelly102Ip": "192.168.178.102",
+  "shelly103Ip": "192.168.178.103",
+  "shelly104Ip": "192.168.178.104",
+  "shelly103MotionChannel": 1,
+  "shelly104MotionChannel": 0,
+  "shelly103OutputChannel": 0,
+  "shelly104OutputChannel": 0,
+  "motionOffDelayMs": 60000,
+  "buttonShortOverrideMs": 120000,
+  "motionEventTimeoutMs": 180000,
+  "shellyPollingEnabled": true,
+  "shellyPollIntervalMs": 5000,
+  "espMotionPin": 12,
+  "espMotionLedPin": 32,
+  "espMotionInvert": false,
+  "timeWindowEnabled": false,
+  "motionStartMin": 0,
+  "motionEndMin": 0,
+  "ntpServer": "pool.ntp.org",
+  "gmtOffsetSec": 3600,
+  "daylightOffsetSec": 3600
+}
