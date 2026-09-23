@@ -2,8 +2,16 @@
 <html lang="de">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="theme-color" content="#7b341e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Treppenlicht">
     <title>Treppenhauslicht</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
     <style>
       :root {
         color-scheme: light;
@@ -19,11 +27,12 @@
         font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
         background: radial-gradient(circle at 10% 10%, #fff6e8 0%, var(--bg) 45%, #e6dccf 100%);
         color: var(--text);
+        -webkit-text-size-adjust: 100%;
       }
       .wrap {
         max-width: 980px;
         margin: 28px auto;
-        padding: 0 16px;
+        padding: 0 16px 88px;
       }
       .grid {
         display: grid;
@@ -59,9 +68,10 @@
         box-sizing: border-box;
         border: 1px solid #d9ccb8;
         border-radius: 10px;
-        padding: 8px 10px;
+        padding: 10px 12px;
         margin-bottom: 10px;
         background: #fffdf9;
+        font-size: 16px;
       }
       .row {
         display: grid;
@@ -71,9 +81,10 @@
       button {
         border: 0;
         border-radius: 10px;
-        padding: 10px 14px;
+        padding: 12px 14px;
         cursor: pointer;
         font-weight: 600;
+        min-height: 44px;
       }
       .primary {
         background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
@@ -120,9 +131,97 @@
         gap: 10px;
         flex-wrap: wrap;
       }
+      .bottom-actions {
+        position: sticky;
+        bottom: 8px;
+        z-index: 5;
+        backdrop-filter: blur(4px);
+      }
+      .menu-toggle {
+        display: none;
+      }
+      .menu-panel {
+        display: block;
+      }
+      .actions a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 14px;
+        border-radius: 10px;
+        background: #f8eee3;
+        color: #52290f;
+        text-decoration: none;
+        min-height: 44px;
+      }
       @media (max-width: 680px) {
+        .wrap {
+          margin: 12px auto;
+          padding: 0 10px 84px;
+        }
+        .card {
+          border-radius: 12px;
+          padding: 14px;
+        }
         .row {
           grid-template-columns: 1fr;
+        }
+        .actions {
+          flex-direction: column;
+          gap: 8px;
+        }
+        .actions button,
+        .actions a {
+          width: 100%;
+          padding: 10px 12px;
+          min-height: 40px;
+          font-size: 0.9rem;
+        }
+        .bottom-actions {
+          position: fixed;
+          left: 10px;
+          right: 10px;
+          bottom: calc(8px + env(safe-area-inset-bottom));
+          max-width: 520px;
+          margin: 0 auto;
+          padding: 0;
+          border: 0;
+          box-shadow: none;
+          background: transparent;
+          backdrop-filter: none;
+          z-index: 20;
+        }
+        .menu-toggle {
+          display: block;
+          width: 100%;
+          border-radius: 14px;
+          min-height: 46px;
+          box-shadow: 0 8px 20px rgba(71, 46, 30, 0.16);
+        }
+        .menu-panel {
+          display: none;
+          margin-bottom: 10px;
+          padding: 10px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.97);
+          border: 1px solid #eadfce;
+          box-shadow: 0 8px 20px rgba(71, 46, 30, 0.14);
+          backdrop-filter: blur(8px);
+        }
+        .menu-panel.open {
+          display: block;
+        }
+        .menu-panel .actions {
+          flex-direction: row;
+          gap: 8px;
+        }
+        .menu-panel .actions button,
+        .menu-panel .actions a {
+          flex: 1 1 0;
+          min-width: 0;
+          padding: 9px 10px;
+          min-height: 38px;
+          font-size: 0.8rem;
         }
       }
     </style>
@@ -251,6 +350,8 @@
 
         <div class="card">
           <h2>Status</h2>
+          <p class="hint" id="ipSummary">STA: - | AP: -</p>
+          <p class="hint" id="espClock">ESP Uhrzeit: -</p>
           <div class="status" id="statusBox">Lade...</div>
           <div class="actions" style="margin-top:10px">
             <button class="ghost" id="shortBtn" type="button">Kurzdruck simulieren</button>
@@ -271,11 +372,14 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:16px">
-        <div class="actions">
-          <button class="primary" id="saveBtn" type="button">Speichern</button>
-          <a href="/update">OTA Update</a>
-          <a href="/status">Raw Status</a>
+      <div class="card bottom-actions" style="margin-top:16px">
+        <button class="primary menu-toggle" id="menuBtn" type="button">Menü</button>
+        <div class="menu-panel" id="menuPanel">
+          <div class="actions">
+            <button class="primary" id="saveBtn" type="button">Speichern</button>
+            <a href="/update">OTA Update</a>
+            <a href="/status">Raw Status</a>
+          </div>
         </div>
       </div>
     </div>
@@ -325,6 +429,10 @@
       async function loadStatus() {
         const r = await fetch("/api/state");
         const s = await r.json();
+        const staIp = s.ipSta || s.ip || "-";
+        const apIp = s.ipAp || "-";
+        q("ipSummary").textContent = `STA: ${staIp} | AP: ${apIp}`;
+        q("espClock").textContent = `ESP Uhrzeit: ${s.espTimeLocal || "unbekannt"}`;
         q("statusBox").textContent = JSON.stringify(s, null, 2);
       }
 
@@ -392,6 +500,9 @@
       q("offBtn").addEventListener("click", () => call("/api/force/off", "POST"));
       q("refreshLogBtn").addEventListener("click", loadLogs);
       q("clearLogBtn").addEventListener("click", clearLogs);
+      q("menuBtn").addEventListener("click", () => {
+        q("menuPanel").classList.toggle("open");
+      });
 
       loadConfig().then(async () => {
         await loadStatus();

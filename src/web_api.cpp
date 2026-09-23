@@ -20,7 +20,16 @@ bool parseBool(const String &value)
 String buildStateJson(const AppConfig &cfg, const LightingController &controller)
 {
   JsonDocument doc;
+  const time_t now = time(nullptr);
+  struct tm localTm;
+  char localTimeBuf[32] = "unbekannt";
+  if (localtime_r(&now, &localTm) != nullptr) {
+    strftime(localTimeBuf, sizeof(localTimeBuf), "%d.%m.%Y %H:%M:%S", &localTm);
+  }
+
   doc["ip"] = WiFi.localIP().toString();
+  doc["ipSta"] = WiFi.localIP().toString();
+  doc["ipAp"] = WiFi.softAPIP().toString();
   doc["rssi"] = WiFi.RSSI();
   doc["wifi_status"] = getConnectionState();
   doc["relayState"] = controller.getRelayState();
@@ -32,7 +41,8 @@ String buildStateJson(const AppConfig &cfg, const LightingController &controller
   doc["shortOverrideActive"] = controller.shortOverrideActive();
   doc["timeWindowActive"] = controller.isMotionWindowActive();
   doc["timeWindow"] = String(hhmmFromMinutes(cfg.motionStartMin) + "-" + hhmmFromMinutes(cfg.motionEndMin));
-  doc["epoch"] = (uint32_t)time(nullptr);
+  doc["epoch"] = (uint32_t)now;
+  doc["espTimeLocal"] = localTimeBuf;
 
   String payload;
   serializeJson(doc, payload);

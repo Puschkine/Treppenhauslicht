@@ -2,6 +2,7 @@
 
 #include <Det.hpp>
 #include <stdarg.h>
+#include <time.h>
 
 namespace {
 
@@ -34,7 +35,21 @@ void appLogf(int level, const char *format, ...)
 
   _DetPrint(level, "%s", msg);
 
-  String line = "[" + String(millis()) + " ms] " + String(msg);
+  String stamp;
+  const time_t now = time(nullptr);
+  if (now > 1700000000) {
+    struct tm tmNow;
+    char timeBuf[32];
+    if (localtime_r(&now, &tmNow) != nullptr && strftime(timeBuf, sizeof(timeBuf), "%d.%m.%Y %H:%M:%S", &tmNow) > 0) {
+      stamp = String(timeBuf);
+    }
+  }
+
+  if (stamp.length() == 0) {
+    stamp = String("+") + String(millis()) + " ms";
+  }
+
+  String line = "[" + stamp + "] " + String(msg);
   pushLogLine(line);
 }
 

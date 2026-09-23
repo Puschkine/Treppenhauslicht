@@ -4,7 +4,7 @@
   "shelly104Ip": "192.168.178.104",
   "shelly103MotionChannel": 1,
   "shelly104MotionChannel": 0,
-  "shelly103OutputChannel": 0,
+  "shelly103OutputChannel": 1,
   "shelly104OutputChannel": 0,
   "motionOffDelayMs": 60000,
   "buttonShortOverrideMs": 120000,

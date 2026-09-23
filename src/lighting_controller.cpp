@@ -101,13 +101,18 @@ void LightingController::handleShortPush()
   appLogf(APP_LOG_LEVEL, "Taster Action: SHORT");
 
   if (relayState) {
+    const bool hadForceOnLatch = forceOnLatch;
     forceOnLatch = false;
     shortOverrideUntil = 0;
-    suppressMotionUntil = millis() + cfg.buttonShortOverrideMs;
+    suppressMotionUntil = hadForceOnLatch ? 0 : millis() + cfg.buttonShortOverrideMs;
     offDeadline = 0;
     setAllLampRelays(false);
     relayState = false;
-    appLogf(APP_LOG_LEVEL, "Relais AUS wegen Short Push OFF (alle Kanaele)");
+    if (hadForceOnLatch) {
+      appLogf(APP_LOG_LEVEL, "Relais AUS wegen Short Push nach Long-Latch (alle Kanaele)");
+    } else {
+      appLogf(APP_LOG_LEVEL, "Relais AUS wegen Short Push OFF (alle Kanaele)");
+    }
     return;
   }
 
