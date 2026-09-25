@@ -4,13 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
     <meta name="theme-color" content="#7b341e">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Treppenlicht">
-    <title>Treppenhauslicht</title>
+    <title>Treppenhauslicht Startseite</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="manifest" href="/site.webmanifest">
     <style>
       :root {
@@ -31,77 +27,43 @@
       }
       .wrap {
         max-width: 980px;
-        margin: 28px auto;
-        padding: 0 16px 88px;
+        margin: 18px auto;
+        padding: 0 12px 18px;
       }
       .grid {
         display: grid;
-        gap: 16px;
+        gap: 14px;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       }
       .card {
         background: var(--card);
-        border-radius: 16px;
-        padding: 18px;
-        box-shadow: 0 10px 28px rgba(71, 46, 30, 0.12);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 10px 26px rgba(71, 46, 30, 0.11);
         border: 1px solid #eadfce;
       }
       h1 {
         margin: 0 0 8px;
-        font-size: 1.7rem;
+        font-size: 1.35rem;
       }
       h2 {
-        margin: 0 0 10px;
-        font-size: 1.1rem;
+        margin: 0 0 8px;
+        font-size: 1.05rem;
       }
-      .lead {
-        margin-top: 0;
+      .hint {
+        margin: 0;
         color: var(--muted);
-      }
-      label {
-        display: block;
-        font-size: 0.9rem;
-        margin-bottom: 2px;
-      }
-      input, select {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid #d9ccb8;
-        border-radius: 10px;
-        padding: 10px 12px;
-        margin-bottom: 10px;
-        background: #fffdf9;
-        font-size: 16px;
-      }
-      .row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-      }
-      button {
-        border: 0;
-        border-radius: 10px;
-        padding: 12px 14px;
-        cursor: pointer;
-        font-weight: 600;
-        min-height: 44px;
-      }
-      .primary {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-        color: #fff;
-      }
-      .ghost {
-        background: #f8eee3;
-        color: #52290f;
+        font-size: 0.86rem;
       }
       .status {
+        margin-top: 8px;
         font-family: Consolas, "Courier New", monospace;
         white-space: pre-wrap;
         background: #f8f5ef;
         border-radius: 10px;
         padding: 10px;
-        font-size: 0.88rem;
-        max-height: 260px;
+        font-size: 0.84rem;
+        max-height: 210px;
         overflow: auto;
       }
       .debuglog {
@@ -111,14 +73,41 @@
         border: 1px solid #ecdcc5;
         border-radius: 10px;
         padding: 10px;
-        font-size: 0.84rem;
-        min-height: 170px;
-        max-height: 280px;
+        font-size: 0.83rem;
+        min-height: 200px;
+        max-height: 340px;
         overflow: auto;
       }
-      .hint {
-        color: var(--muted);
-        font-size: 0.86rem;
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+      button,
+      .linkbtn {
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        min-height: 40px;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+      }
+      .primary {
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+        color: #fff;
+      }
+      .ghost {
+        background: #f8eee3;
+        color: #52290f;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 10px 0 4px;
       }
       .ok {
         color: #0f7a35;
@@ -126,102 +115,13 @@
       .err {
         color: #aa1f2d;
       }
-      .actions {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .bottom-actions {
-        position: sticky;
-        bottom: 8px;
-        z-index: 5;
-        backdrop-filter: blur(4px);
-      }
-      .menu-toggle {
-        display: none;
-      }
-      .menu-panel {
-        display: block;
-      }
-      .actions a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px 14px;
-        border-radius: 10px;
-        background: #f8eee3;
-        color: #52290f;
-        text-decoration: none;
-        min-height: 44px;
-      }
       @media (max-width: 680px) {
         .wrap {
-          margin: 12px auto;
-          padding: 0 10px 84px;
-        }
-        .card {
-          border-radius: 12px;
-          padding: 14px;
-        }
-        .row {
-          grid-template-columns: 1fr;
+          margin: 10px auto;
+          padding: 0 10px 12px;
         }
         .actions {
-          flex-direction: column;
-          gap: 8px;
-        }
-        .actions button,
-        .actions a {
-          width: 100%;
-          padding: 10px 12px;
-          min-height: 40px;
-          font-size: 0.9rem;
-        }
-        .bottom-actions {
-          position: fixed;
-          left: 10px;
-          right: 10px;
-          bottom: calc(8px + env(safe-area-inset-bottom));
-          max-width: 520px;
-          margin: 0 auto;
-          padding: 0;
-          border: 0;
-          box-shadow: none;
-          background: transparent;
-          backdrop-filter: none;
-          z-index: 20;
-        }
-        .menu-toggle {
-          display: block;
-          width: 100%;
-          border-radius: 14px;
-          min-height: 46px;
-          box-shadow: 0 8px 20px rgba(71, 46, 30, 0.16);
-        }
-        .menu-panel {
-          display: none;
-          margin-bottom: 10px;
-          padding: 10px;
-          border-radius: 14px;
-          background: rgba(255, 255, 255, 0.97);
-          border: 1px solid #eadfce;
-          box-shadow: 0 8px 20px rgba(71, 46, 30, 0.14);
-          backdrop-filter: blur(8px);
-        }
-        .menu-panel.open {
-          display: block;
-        }
-        .menu-panel .actions {
-          flex-direction: row;
-          gap: 8px;
-        }
-        .menu-panel .actions button,
-        .menu-panel .actions a {
-          flex: 1 1 0;
-          min-width: 0;
-          padding: 9px 10px;
-          min-height: 38px;
-          font-size: 0.8rem;
+          grid-template-columns: 1fr;
         }
       }
     </style>
@@ -229,156 +129,52 @@
   <body>
     <div class="wrap">
       <div class="card">
-        <h1>Treppenhauslicht Steuerung</h1>
-        <p class="lead">ESP32 als zentrale Logik fuer BWM + Taster + Shelly Relais.</p>
-        <div id="saveResult" class="hint">Bereit.</div>
+        <h1>Treppenhauslicht Startseite</h1>
+        <p class="hint" id="ipSummary">STA: - | AP: -</p>
+        <p class="hint" id="espClock">ESP Uhrzeit: -</p>
+        <div class="toggle">
+          <strong>Automatikbetrieb</strong>
+          <button id="automationBtn" class="ghost" type="button">-</button>
+        </div>
+        <p id="actionResult" class="hint">Bereit.</p>
       </div>
 
       <div class="grid">
         <div class="card">
-          <h2>Shelly Netzwerk</h2>
-          <label for="s102">Shelly 102 IP</label>
-          <input id="s102" placeholder="z.B. 192.168.1.102">
-
-          <label for="s103">Shelly 103 IP</label>
-          <input id="s103" placeholder="z.B. 192.168.1.103">
-
-          <label for="s104">Shelly 104 IP</label>
-          <input id="s104" placeholder="z.B. 192.168.1.104">
-
-          <div class="row">
-            <div>
-              <label for="ch103">BWM Kanal Shelly 103</label>
-              <select id="ch103"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-            <div>
-              <label for="ch104">BWM Kanal Shelly 104</label>
-              <select id="ch104"><option value="0">0</option><option value="1">1</option></select>
-            </div>
+          <h2>Lichtsteuerung</h2>
+          <div class="actions" style="margin-bottom:8px">
+            <button class="primary" type="button" id="allOnBtn">Alle EIN</button>
+            <button class="ghost" type="button" id="allOffBtn">Alle AUS</button>
           </div>
-
-          <div class="row">
-            <div>
-              <label for="out103">Lampen Output Shelly 103</label>
-              <select id="out103"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-            <div>
-              <label for="out104">Lampen Output Shelly 104</label>
-              <select id="out104"><option value="0">0</option><option value="1">1</option></select>
-            </div>
+          <div class="actions">
+            <button class="ghost" type="button" data-node="102" data-ch="0" data-on="1">Treppe EIN</button>
+            <button class="ghost" type="button" data-node="102" data-ch="0" data-on="0">Treppe AUS</button>
+            <button class="ghost" type="button" data-node="103" data-ch="0" data-on="1">Gang Hinten 0 EIN</button>
+            <button class="ghost" type="button" data-node="103" data-ch="0" data-on="0">Gang Hinten 0 AUS</button>
+            <button class="ghost" type="button" data-node="103" data-ch="1" data-on="1">Gang Hinten 1 EIN</button>
+            <button class="ghost" type="button" data-node="103" data-ch="1" data-on="0">Gang Hinten 1 AUS</button>
+            <button class="ghost" type="button" data-node="104" data-ch="0" data-on="1">Gang Vorne 0 EIN</button>
+            <button class="ghost" type="button" data-node="104" data-ch="0" data-on="0">Gang Vorne 0 AUS</button>
+            <button class="ghost" type="button" data-node="104" data-ch="1" data-on="1">Gang Vorne 1 EIN</button>
+            <button class="ghost" type="button" data-node="104" data-ch="1" data-on="0">Gang Vorne 1 AUS</button>
           </div>
-        </div>
-
-        <div class="card">
-          <h2>Logik und Zeiten</h2>
-          <label for="motionDelay">BWM Nachlauf (ms)</label>
-          <input id="motionDelay" type="number" min="100" step="100">
-
-          <label for="buttonDelay">Taster Kurzdruck Nachlauf (ms)</label>
-          <input id="buttonDelay" type="number" min="100" step="100">
-
-          <label for="eventTimeout">Plausi Timeout BWM Event (ms)</label>
-          <input id="eventTimeout" type="number" min="1000" step="1000">
-
-          <div class="row">
-            <div>
-              <label for="pollingEnabled">Shelly Polling aktiv</label>
-              <select id="pollingEnabled"><option value="true">ja</option><option value="false">nein</option></select>
-            </div>
-            <div>
-              <label for="pollingInterval">Shelly Polling Intervall (ms)</label>
-              <input id="pollingInterval" type="number" min="1000" step="500">
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="espPin">ESP BWM Pin</label>
-              <input id="espPin" type="number" min="0" max="39">
-            </div>
-            <div>
-              <label for="espLedPin">ESP BWM LED Pin</label>
-              <input id="espLedPin" type="number" min="0" max="39">
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="espInvert">ESP BWM invertiert</label>
-              <select id="espInvert"><option value="false">nein</option><option value="true">ja</option></select>
-            </div>
-            <div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="windowEnabled">Zeitfenster aktiv</label>
-              <select id="windowEnabled"><option value="false">nein</option><option value="true">ja</option></select>
-            </div>
-            <div></div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="start">BWM aktiv von</label>
-              <input id="start" type="time">
-            </div>
-            <div>
-              <label for="end">BWM aktiv bis</label>
-              <input id="end" type="time">
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>NTP</h2>
-          <label for="ntp">NTP Server</label>
-          <input id="ntp" placeholder="pool.ntp.org">
-          <div class="row">
-            <div>
-              <label for="gmt">GMT Offset (Sekunden)</label>
-              <input id="gmt" type="number" step="3600">
-            </div>
-            <div>
-              <label for="dst">DST Offset (Sekunden)</label>
-              <input id="dst" type="number" step="3600">
-            </div>
-          </div>
-          <p class="hint">Mitteleuropa: GMT=3600, DST=3600</p>
         </div>
 
         <div class="card">
           <h2>Status</h2>
-          <p class="hint" id="ipSummary">STA: - | AP: -</p>
-          <p class="hint" id="espClock">ESP Uhrzeit: -</p>
           <div class="status" id="statusBox">Lade...</div>
-          <div class="actions" style="margin-top:10px">
-            <button class="ghost" id="shortBtn" type="button">Kurzdruck simulieren</button>
-            <button class="ghost" id="longBtn" type="button">Langdruck simulieren</button>
-            <button class="ghost" id="offBtn" type="button">Alle AUS</button>
+          <div class="actions" style="margin-top:8px">
+            <a class="linkbtn ghost" href="/settings.html">Einstellungen</a>
+            <a class="linkbtn ghost" href="/update">OTA Update</a>
           </div>
-          <p class="hint">Webhook BWM: /api/event/motion?node=103&channel=0&state=1</p>
-          <p class="hint">Webhook Taster: /api/event/button?type=short oder type=long</p>
         </div>
 
         <div class="card">
           <h2>Debug Log</h2>
           <div class="debuglog" id="logBox">Lade Debug-Ausgaben...</div>
-          <div class="actions" style="margin-top:10px">
+          <div class="actions" style="margin-top:8px">
             <button class="ghost" id="refreshLogBtn" type="button">Log aktualisieren</button>
             <button class="ghost" id="clearLogBtn" type="button">Log leeren</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="card bottom-actions" style="margin-top:16px">
-        <button class="primary menu-toggle" id="menuBtn" type="button">Menü</button>
-        <div class="menu-panel" id="menuPanel">
-          <div class="actions">
-            <button class="primary" id="saveBtn" type="button">Speichern</button>
-            <a href="/update">OTA Update</a>
-            <a href="/status">Raw Status</a>
           </div>
         </div>
       </div>
@@ -387,43 +183,30 @@
     <script>
       const q = (id) => document.getElementById(id);
 
-      const toMins = (hhmm) => {
-        const [h, m] = (hhmm || "00:00").split(":").map(Number);
-        return ((h || 0) * 60 + (m || 0)) % 1440;
-      };
+      function relayName(node, channel) {
+        if (node === 102 && channel === 0) return "Treppe";
+        if (node === 103 && channel === 0) return "Gang Hinten 0";
+        if (node === 103 && channel === 1) return "Gang Hinten 1";
+        if (node === 104 && channel === 0) return "Gang Vorne 0";
+        if (node === 104 && channel === 1) return "Gang Vorne 1";
+        return `Shelly ${node} Kanal ${channel}`;
+      }
 
-      const minsToHHMM = (mins) => {
-        const m = ((Number(mins) || 0) + 1440) % 1440;
-        const h = String(Math.floor(m / 60)).padStart(2, "0");
-        const mm = String(m % 60).padStart(2, "0");
-        return `${h}:${mm}`;
-      };
+      function setActionResult(text, ok = true) {
+        const el = q("actionResult");
+        el.textContent = text;
+        el.className = ok ? "hint ok" : "hint err";
+      }
 
-      async function loadConfig() {
-        const r = await fetch("/api/config");
-        const c = await r.json();
-
-        q("s102").value = c.shelly102Ip || "";
-        q("s103").value = c.shelly103Ip || "";
-        q("s104").value = c.shelly104Ip || "";
-        q("ch103").value = String(c.shelly103MotionChannel ?? 0);
-        q("ch104").value = String(c.shelly104MotionChannel ?? 0);
-        q("out103").value = String(c.shelly103OutputChannel ?? 0);
-        q("out104").value = String(c.shelly104OutputChannel ?? 0);
-        q("motionDelay").value = c.motionOffDelayMs ?? 60000;
-        q("buttonDelay").value = c.buttonShortOverrideMs ?? 120000;
-        q("eventTimeout").value = c.motionEventTimeoutMs ?? 180000;
-        q("pollingEnabled").value = String(c.shellyPollingEnabled ?? true);
-        q("pollingInterval").value = c.shellyPollIntervalMs ?? 5000;
-        q("espPin").value = c.espMotionPin ?? 12;
-        q("espLedPin").value = c.espMotionLedPin ?? 32;
-        q("espInvert").value = String(Boolean(c.espMotionInvert));
-        q("windowEnabled").value = String(Boolean(c.timeWindowEnabled));
-        q("start").value = c.motionStartHHMM || minsToHHMM(c.motionStartMin || 0);
-        q("end").value = c.motionEndHHMM || minsToHHMM(c.motionEndMin || 0);
-        q("ntp").value = c.ntpServer || "pool.ntp.org";
-        q("gmt").value = c.gmtOffsetSec ?? 3600;
-        q("dst").value = c.daylightOffsetSec ?? 3600;
+      async function postJson(url, payload) {
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) {
+          throw new Error(`HTTP ${r.status}`);
+        }
       }
 
       async function loadStatus() {
@@ -433,6 +216,13 @@
         const apIp = s.ipAp || "-";
         q("ipSummary").textContent = `STA: ${staIp} | AP: ${apIp}`;
         q("espClock").textContent = `ESP Uhrzeit: ${s.espTimeLocal || "unbekannt"}`;
+
+        const autoBtn = q("automationBtn");
+        const autoOn = Boolean(s.automationEnabled);
+        autoBtn.textContent = autoOn ? "Automatik EIN" : "Automatik AUS";
+        autoBtn.dataset.enabled = autoOn ? "1" : "0";
+        autoBtn.className = autoOn ? "primary" : "ghost";
+
         q("statusBox").textContent = JSON.stringify(s, null, 2);
       }
 
@@ -447,69 +237,44 @@
         await loadLogs();
       }
 
-      async function saveConfig() {
-        const payload = {
-          shelly102Ip: q("s102").value.trim(),
-          shelly103Ip: q("s103").value.trim(),
-          shelly104Ip: q("s104").value.trim(),
-          shelly103MotionChannel: Number(q("ch103").value),
-          shelly104MotionChannel: Number(q("ch104").value),
-          shelly103OutputChannel: Number(q("out103").value),
-          shelly104OutputChannel: Number(q("out104").value),
-          motionOffDelayMs: Number(q("motionDelay").value),
-          buttonShortOverrideMs: Number(q("buttonDelay").value),
-          motionEventTimeoutMs: Number(q("eventTimeout").value),
-          shellyPollingEnabled: q("pollingEnabled").value === "true",
-          shellyPollIntervalMs: Number(q("pollingInterval").value),
-          espMotionPin: Number(q("espPin").value),
-          espMotionLedPin: Number(q("espLedPin").value),
-          espMotionInvert: q("espInvert").value === "true",
-          timeWindowEnabled: q("windowEnabled").value === "true",
-          motionStartMin: toMins(q("start").value),
-          motionEndMin: toMins(q("end").value),
-          ntpServer: q("ntp").value.trim(),
-          gmtOffsetSec: Number(q("gmt").value),
-          daylightOffsetSec: Number(q("dst").value)
-        };
+      async function setAll(on) {
+        await postJson("/api/manual/relay", { all: true, on });
+        setActionResult(on ? "Alle Kanaele eingeschaltet." : "Alle Kanaele ausgeschaltet.");
+        await loadStatus();
+      }
 
-        const r = await fetch("/api/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+      async function setSingle(node, channel, on) {
+        await postJson("/api/manual/relay", { node, channel, on });
+        setActionResult(`${relayName(node, channel)} -> ${on ? "EIN" : "AUS"}`);
+        await loadStatus();
+      }
+
+      async function toggleAutomation() {
+        const currentlyOn = q("automationBtn").dataset.enabled === "1";
+        const newState = !currentlyOn;
+        await postJson("/api/automation", { enabled: newState });
+        setActionResult(newState ? "Automatik eingeschaltet." : "Automatik ausgeschaltet.");
+        await loadStatus();
+      }
+
+      q("allOnBtn").addEventListener("click", () => setAll(true).catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
+      q("allOffBtn").addEventListener("click", () => setAll(false).catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
+      q("automationBtn").addEventListener("click", () => toggleAutomation().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
+      q("refreshLogBtn").addEventListener("click", () => loadLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
+      q("clearLogBtn").addEventListener("click", () => clearLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
+
+      document.querySelectorAll("button[data-node]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const node = Number(btn.dataset.node);
+          const channel = Number(btn.dataset.ch);
+          const on = btn.dataset.on === "1";
+          setSingle(node, channel, on).catch((e) => setActionResult(`Fehler: ${e.message}`, false));
         });
-
-        const box = q("saveResult");
-        if (r.ok) {
-          box.className = "ok";
-          box.textContent = "Gespeichert.";
-          await loadStatus();
-        } else {
-          box.className = "err";
-          box.textContent = "Speichern fehlgeschlagen.";
-        }
-      }
-
-      async function call(url, method = "GET") {
-        await fetch(url, { method });
-        await loadStatus();
-      }
-
-      q("saveBtn").addEventListener("click", saveConfig);
-      q("shortBtn").addEventListener("click", () => call("/api/event/button?type=short&source=ui"));
-      q("longBtn").addEventListener("click", () => call("/api/event/button?type=long&source=ui"));
-      q("offBtn").addEventListener("click", () => call("/api/force/off", "POST"));
-      q("refreshLogBtn").addEventListener("click", loadLogs);
-      q("clearLogBtn").addEventListener("click", clearLogs);
-      q("menuBtn").addEventListener("click", () => {
-        q("menuPanel").classList.toggle("open");
       });
 
-      loadConfig().then(async () => {
-        await loadStatus();
-        await loadLogs();
-      });
-      setInterval(loadStatus, 3000);
-      setInterval(loadLogs, 2000);
+      loadStatus().then(loadLogs).catch((e) => setActionResult(`Fehler beim Laden: ${e.message}`, false));
+      setInterval(() => loadStatus().catch(() => {}), 3000);
+      setInterval(() => loadLogs().catch(() => {}), 2000);
     </script>
   </body>
 </html>

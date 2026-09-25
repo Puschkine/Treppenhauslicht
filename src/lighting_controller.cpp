@@ -174,6 +174,11 @@ bool LightingController::getForceOnLatch() const
   return forceOnLatch;
 }
 
+bool LightingController::getAutomationEnabled() const
+{
+  return cfg.automationEnabled;
+}
+
 bool LightingController::isShelly102CommandRecent(unsigned long guardMs) const
 {
   return isBeforeMillis(millis(), lastShelly102CommandMs + guardMs);
@@ -268,6 +273,11 @@ void LightingController::applyMotionPlausibilityTimeouts()
 
 void LightingController::evaluateLighting()
 {
+  if (!cfg.automationEnabled && !forceOnLatch && !isBeforeMillis(millis(), shortOverrideUntil)) {
+    offDeadline = 0;
+    return;
+  }
+
   bool desiredOn = computeDesiredOn();
   bool anyMotionActive = activeMotionCount() > 0;
 
@@ -317,6 +327,9 @@ bool LightingController::computeDesiredOn() const
   }
   if (isBeforeMillis(now, shortOverrideUntil)) {
     return true;
+  }
+  if (!cfg.automationEnabled) {
+    return false;
   }
   if (isBeforeMillis(now, suppressMotionUntil)) {
     return false;
@@ -467,4 +480,63 @@ bool LightingController::queryShellyInputState(const String &ip, uint8_t channel
 
   appLogf(APP_LOG_LEVEL, "Polling RPC ohne state bei Shelly %s", ip.c_str());
   return false;
+}
+
+bool LightingController::setSingleLampRelay(uint16_t node, uint8_t relay, bool on)
+{
+  if (relay > 1) {
+    return false;
+  }
+
+  String ip;
+  if (node == 102) {
+    if (relay != 0) {
+      return false;
+    }
+    ip = cfg.shelly102Ip;
+  } else if (node == 103) {
+    ip = cfg.shelly103Ip;
+  } else if (node == 104) {
+    ip = cfg.shelly104Ip;
+  } else {
+    return false;
+  }
+
+  if (ip.length() == 0) {
+    return false;
+  }
+
+  sendShellyRelayCommand(ip, relay, on);
+  appLogf(APP_LOG_LEVEL, "Manuell: Shelly %u Kanal %u -> %s", node, relay, on ? "EIN" : "AUS");
+  return true;
+}
+
+void LightingController::setAllLampsManual(bool on)
+{
+  if (on) {
+    forceOnLatch = true;
+    shortOverrideUntil = 0;
+    suppressMotionUntil = 0;
+  } else {
+    forceOnLatch = false;
+    shortOverrideUntil = 0;
+    suppressMotionUntil = 0;
+  }
+
+  offDeadline = 0;
+  setAllLampRelays(on);
+  relayState = on;
+  appLogf(APP_LOG_LEVEL, "Manuell: Alle Kanaele %s", on ? "EIN" : "AUS");
+}
+
+void LightingController::setAutomationEnabled(bool enabled)
+{
+  if (cfg.automationEnabled == enabled) {
+    return;
+  }
+
+  cfg.automationEnabled = enabled;
+  offDeadline = 0;
+  appLogf(APP_LOG_LEVEL, "Automatikbetrieb %s", enabled ? "AKTIV" : "INAKTIV");
+  evaluateLighting();
 }

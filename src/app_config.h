@@ -19,6 +19,7 @@ struct AppConfig {
   uint8_t espMotionLedPin = 32;
   bool espMotionInvert = false;
   bool timeWindowEnabled = false;
+  bool automationEnabled = true;
   uint16_t motionStartMin = 0;
   uint16_t motionEndMin = 0;
   String ntpServer = "pool.ntp.org";

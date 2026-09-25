@@ -30,6 +30,7 @@ bool saveConfig(const AppConfig &cfg)
   doc["espMotionLedPin"] = cfg.espMotionLedPin;
   doc["espMotionInvert"] = cfg.espMotionInvert;
   doc["timeWindowEnabled"] = cfg.timeWindowEnabled;
+  doc["automationEnabled"] = cfg.automationEnabled;
   doc["motionStartMin"] = cfg.motionStartMin;
   doc["motionEndMin"] = cfg.motionEndMin;
   doc["ntpServer"] = cfg.ntpServer;
@@ -83,6 +84,7 @@ bool loadConfig(AppConfig &cfg)
   cfg.espMotionLedPin = doc["espMotionLedPin"] | cfg.espMotionLedPin;
   cfg.espMotionInvert = doc["espMotionInvert"] | cfg.espMotionInvert;
   cfg.timeWindowEnabled = doc["timeWindowEnabled"] | cfg.timeWindowEnabled;
+  cfg.automationEnabled = doc["automationEnabled"] | cfg.automationEnabled;
   cfg.motionStartMin = doc["motionStartMin"] | cfg.motionStartMin;
   cfg.motionEndMin = doc["motionEndMin"] | cfg.motionEndMin;
   cfg.ntpServer = doc["ntpServer"] | cfg.ntpServer;

@@ -22,9 +22,13 @@ public:
   bool getMotion103() const;
   bool getMotion104() const;
   bool getForceOnLatch() const;
+  bool getAutomationEnabled() const;
   bool shortOverrideActive() const;
   uint8_t activeMotionCount() const;
   bool isMotionWindowActive() const;
+  bool setSingleLampRelay(uint16_t node, uint8_t relay, bool on);
+  void setAllLampsManual(bool on);
+  void setAutomationEnabled(bool enabled);
 
 private:
   AppConfig &cfg;

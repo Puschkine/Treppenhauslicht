@@ -38,6 +38,7 @@ String buildStateJson(const AppConfig &cfg, const LightingController &controller
   doc["motion104"] = controller.getMotion104();
   doc["activeMotionCount"] = controller.activeMotionCount();
   doc["forceOnLatch"] = controller.getForceOnLatch();
+  doc["automationEnabled"] = controller.getAutomationEnabled();
   doc["shortOverrideActive"] = controller.shortOverrideActive();
   doc["timeWindowActive"] = controller.isMotionWindowActive();
   doc["timeWindow"] = String(hhmmFromMinutes(cfg.motionStartMin) + "-" + hhmmFromMinutes(cfg.motionEndMin));
@@ -68,6 +69,7 @@ String buildConfigJson(const AppConfig &cfg)
   doc["espMotionLedPin"] = cfg.espMotionLedPin;
   doc["espMotionInvert"] = cfg.espMotionInvert;
   doc["timeWindowEnabled"] = cfg.timeWindowEnabled;
+  doc["automationEnabled"] = cfg.automationEnabled;
   doc["motionStartMin"] = cfg.motionStartMin;
   doc["motionEndMin"] = cfg.motionEndMin;
   doc["motionStartHHMM"] = hhmmFromMinutes(cfg.motionStartMin);
@@ -130,6 +132,9 @@ void applyJsonConfig(const JsonDocument &doc, AppConfig &cfg)
   }
   if (doc["timeWindowEnabled"].is<bool>()) {
     cfg.timeWindowEnabled = doc["timeWindowEnabled"].as<bool>();
+  }
+  if (doc["automationEnabled"].is<bool>()) {
+    cfg.automationEnabled = doc["automationEnabled"].as<bool>();
   }
   if (doc["motionStartMin"].is<int>()) {
     cfg.motionStartMin = (uint16_t)constrain(doc["motionStartMin"].as<int>(), 0, 1439);
@@ -289,6 +294,86 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
     controller.forceOff();
     request->send(200, "application/json", "{\"ok\":true}");
   });
+
+  server.on(
+      "/api/automation", HTTP_POST,
+      [](AsyncWebServerRequest *request) {},
+      nullptr,
+      [&](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        if (index == 0) {
+          request->_tempObject = new String();
+        }
+
+        String *body = reinterpret_cast<String *>(request->_tempObject);
+        body->concat(reinterpret_cast<const char *>(data), len);
+
+        if (index + len != total) {
+          return;
+        }
+
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, *body);
+        delete body;
+        request->_tempObject = nullptr;
+
+        if (err || !doc["enabled"].is<bool>()) {
+          request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_payload\"}");
+          return;
+        }
+
+        controller.setAutomationEnabled(doc["enabled"].as<bool>());
+        saveConfig(cfg);
+        request->send(200, "application/json", "{\"ok\":true}");
+      });
+
+  server.on(
+      "/api/manual/relay", HTTP_POST,
+      [](AsyncWebServerRequest *request) {},
+      nullptr,
+      [&](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        if (index == 0) {
+          request->_tempObject = new String();
+        }
+
+        String *body = reinterpret_cast<String *>(request->_tempObject);
+        body->concat(reinterpret_cast<const char *>(data), len);
+
+        if (index + len != total) {
+          return;
+        }
+
+        JsonDocument doc;
+        DeserializationError err = deserializeJson(doc, *body);
+        delete body;
+        request->_tempObject = nullptr;
+
+        if (err || !doc["on"].is<bool>()) {
+          request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_payload\"}");
+          return;
+        }
+
+        const bool on = doc["on"].as<bool>();
+        const bool all = doc["all"].is<bool>() && doc["all"].as<bool>();
+        if (all) {
+          controller.setAllLampsManual(on);
+          request->send(200, "application/json", "{\"ok\":true,\"scope\":\"all\"}");
+          return;
+        }
+
+        if (!doc["node"].is<int>() || !doc["channel"].is<int>()) {
+          request->send(400, "application/json", "{\"ok\":false,\"error\":\"missing_node_or_channel\"}");
+          return;
+        }
+
+        const uint16_t node = (uint16_t)doc["node"].as<int>();
+        const uint8_t channel = (uint8_t)doc["channel"].as<int>();
+        if (!controller.setSingleLampRelay(node, channel, on)) {
+          request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_target\"}");
+          return;
+        }
+
+        request->send(200, "application/json", "{\"ok\":true,\"scope\":\"single\"}");
+      });
 
   server.onNotFound([](AsyncWebServerRequest *request) {
     request->send(404, "text/plain", "Not found");

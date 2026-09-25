@@ -15,6 +15,7 @@
   "espMotionLedPin": 32,
   "espMotionInvert": false,
   "timeWindowEnabled": false,
+  "automationEnabled": true,
   "motionStartMin": 0,
   "motionEndMin": 0,
   "ntpServer": "pool.ntp.org",
