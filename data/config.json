@@ -18,6 +18,12 @@
   "automationEnabled": true,
   "motionStartMin": 0,
   "motionEndMin": 0,
+  "windowUseSun": true,
+  "sunOnlineLookup": true,
+  "latitude": 49.0758,
+  "longitude": 12.1053,
+  "sunriseOffsetMin": 120,
+  "sunsetOffsetMin": 180,
   "ntpServer": "pool.ntp.org",
   "gmtOffsetSec": 3600,
   "daylightOffsetSec": 3600

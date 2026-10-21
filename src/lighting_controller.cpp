@@ -4,9 +4,53 @@
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <math.h>
 #include <time.h>
 
 #include "debug_log.h"
+
+namespace {
+
+// NOAA/Almanac sunrise equation, accurate to a few minutes; good enough for lighting control.
+bool computeSunEvent(int dayOfYear, double latDeg, double lonDeg, double utcOffsetHours, bool sunrise, int &resultMin)
+{
+  const double DEG2RAD = M_PI / 180.0;
+  const double RAD2DEG = 180.0 / M_PI;
+
+  double lngHour = lonDeg / 15.0;
+  double t = sunrise ? (dayOfYear + ((6.0 - lngHour) / 24.0)) : (dayOfYear + ((18.0 - lngHour) / 24.0));
+
+  double M = (0.9856 * t) - 3.289;
+
+  double L = M + (1.916 * sin(M * DEG2RAD)) + (0.020 * sin(2 * M * DEG2RAD)) + 282.634;
+  L = fmod(L + 360.0, 360.0);
+
+  double RA = RAD2DEG * atan(0.91764 * tan(L * DEG2RAD));
+  RA = fmod(RA + 360.0, 360.0);
+  RA += (floor(L / 90.0) * 90.0) - (floor(RA / 90.0) * 90.0);
+  RA /= 15.0;
+
+  double sinDec = 0.39782 * sin(L * DEG2RAD);
+  double cosDec = cos(asin(sinDec));
+
+  double cosH = (cos(90.833 * DEG2RAD) - (sinDec * sin(latDeg * DEG2RAD))) / (cosDec * cos(latDeg * DEG2RAD));
+  if (cosH > 1.0 || cosH < -1.0) {
+    return false; // Sonne geht an diesem Tag/Ort nicht auf bzw. unter
+  }
+
+  double H = sunrise ? (360.0 - RAD2DEG * acos(cosH)) : (RAD2DEG * acos(cosH));
+  H /= 15.0;
+
+  double T = H + RA - (0.06571 * t) - 6.622;
+
+  double UT = fmod(T - lngHour + 24.0, 24.0);
+  double localT = fmod(UT + utcOffsetHours + 24.0, 24.0);
+
+  resultMin = (int)round(localT * 60.0) % (24 * 60);
+  return true;
+}
+
+} // namespace
 
 LightingController::LightingController(AppConfig &config) : cfg(config)
 {
@@ -218,8 +262,11 @@ bool LightingController::isMotionWindowActive() const
   struct tm localTime;
   localtime_r(&now, &localTime);
   uint16_t currentMin = (uint16_t)(localTime.tm_hour * 60 + localTime.tm_min);
-  uint16_t start = cfg.motionStartMin % (24 * 60);
-  uint16_t end = cfg.motionEndMin % (24 * 60);
+  uint16_t start;
+  uint16_t end;
+  if (!getEffectiveWindow(start, end)) {
+    return true; // Keine Sonnenauf-/untergang ermittelbar (z.B. Polarregion) -> immer aktiv
+  }
 
   if (start == end) {
     return true;
@@ -229,6 +276,105 @@ bool LightingController::isMotionWindowActive() const
   }
   return currentMin >= start || currentMin < end;
 }
+
+bool LightingController::getSunTimes(int &sunriseMin, int &sunsetMin) const
+{
+  return resolveSunTimes(sunriseMin, sunsetMin);
+}
+
+bool LightingController::getEffectiveWindow(uint16_t &startMin, uint16_t &endMin) const
+{
+  if (cfg.windowUseSun) {
+    int sunriseMin = 0;
+    int sunsetMin = 0;
+    if (!resolveSunTimes(sunriseMin, sunsetMin)) {
+      return false;
+    }
+    startMin = (uint16_t)(((sunsetMin - cfg.sunsetOffsetMin) % (24 * 60) + (24 * 60)) % (24 * 60));
+    endMin = (uint16_t)(((sunriseMin + cfg.sunriseOffsetMin) % (24 * 60) + (24 * 60)) % (24 * 60));
+  } else {
+    startMin = cfg.motionStartMin % (24 * 60);
+    endMin = cfg.motionEndMin % (24 * 60);
+  }
+  return true;
+}
+
+bool LightingController::resolveSunTimes(int &sunriseMin, int &sunsetMin) const
+{
+  time_t now = time(nullptr);
+  if (now < 100000) {
+    return false;
+  }
+
+  struct tm localTime;
+  localtime_r(&now, &localTime);
+
+  if (sunCacheYday == localTime.tm_yday) {
+    sunriseMin = sunCacheSunriseMin;
+    sunsetMin = sunCacheSunsetMin;
+    return true;
+  }
+
+  if (cfg.sunOnlineLookup && WiFi.status() == WL_CONNECTED && !isBeforeMillis(millis(), nextSunFetchMs)) {
+    if (fetchSunTimesOnline(sunriseMin, sunsetMin)) {
+      sunCacheYday = localTime.tm_yday;
+      sunCacheSunriseMin = sunriseMin;
+      sunCacheSunsetMin = sunsetMin;
+      nextSunFetchMs = millis() + 6UL * 60UL * 60UL * 1000UL; // heute erledigt, naechster Versuch in 6h
+      return true;
+    }
+    nextSunFetchMs = millis() + 5UL * 60UL * 1000UL; // Fehler: in 5 Minuten erneut versuchen
+  }
+
+  double utcOffsetHours = (cfg.gmtOffsetSec + cfg.daylightOffsetSec) / 3600.0;
+  bool haveSunrise = computeSunEvent(localTime.tm_yday + 1, cfg.latitude, cfg.longitude, utcOffsetHours, true, sunriseMin);
+  bool haveSunset = computeSunEvent(localTime.tm_yday + 1, cfg.latitude, cfg.longitude, utcOffsetHours, false, sunsetMin);
+  return haveSunrise && haveSunset;
+}
+
+bool LightingController::fetchSunTimesOnline(int &sunriseMin, int &sunsetMin) const
+{
+  String url = "http://api.sunrise-sunset.org/v2?lat=" + String(cfg.latitude, 6) + "&lng=" + String(cfg.longitude, 6) +
+               "&date=today&time_format=unix";
+  HTTPClient http;
+  http.setTimeout(4000);
+  http.begin(url);
+  int code = http.GET();
+  if (code < 200 || code >= 300) {
+    http.end();
+    appLogf(APP_LOG_LEVEL, "Sonnenzeiten-API Fehler: HTTP %d", code);
+    return false;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload)) {
+    appLogf(APP_LOG_LEVEL, "Sonnenzeiten-API JSON Fehler");
+    return false;
+  }
+
+  if (!doc["sunrise"].is<long>() || !doc["sunset"].is<long>()) {
+    appLogf(APP_LOG_LEVEL, "Sonnenzeiten-API ohne gueltige Zeiten (Status: %s)", doc["sun_status"] | "unbekannt");
+    return false;
+  }
+
+  time_t sunriseEpoch = (time_t)doc["sunrise"].as<long>();
+  time_t sunsetEpoch = (time_t)doc["sunset"].as<long>();
+
+  struct tm tmSunrise;
+  struct tm tmSunset;
+  localtime_r(&sunriseEpoch, &tmSunrise);
+  localtime_r(&sunsetEpoch, &tmSunset);
+  sunriseMin = tmSunrise.tm_hour * 60 + tmSunrise.tm_min;
+  sunsetMin = tmSunset.tm_hour * 60 + tmSunset.tm_min;
+
+  appLogf(APP_LOG_LEVEL, "Sonnenzeiten online geladen: Aufgang %02d:%02d, Untergang %02d:%02d", tmSunrise.tm_hour, tmSunrise.tm_min,
+          tmSunset.tm_hour, tmSunset.tm_min);
+  return true;
+}
+
 
 bool LightingController::isBeforeMillis(unsigned long now, unsigned long target) const
 {

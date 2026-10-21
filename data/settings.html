@@ -317,10 +317,13 @@
               <label for="windowEnabled">Zeitfenster aktiv</label>
               <select id="windowEnabled"><option value="false">nein</option><option value="true">ja</option></select>
             </div>
-            <div></div>
+            <div>
+              <label for="windowMode">Zeitfenster-Modus</label>
+              <select id="windowMode"><option value="fixed">feste Uhrzeit</option><option value="sun">Sonnenauf-/untergang</option></select>
+            </div>
           </div>
 
-          <div class="row">
+          <div class="row" id="fixedWindowRow">
             <div>
               <label for="start">BWM aktiv von</label>
               <input id="start" type="time">
@@ -330,6 +333,37 @@
               <input id="end" type="time">
             </div>
           </div>
+
+          <div class="row" id="sunWindowRow">
+            <div>
+              <label for="sunsetOffset">Offset vor Sonnenuntergang (Min)</label>
+              <input id="sunsetOffset" type="number" step="1">
+            </div>
+            <div>
+              <label for="sunriseOffset">Offset nach Sonnenaufgang (Min)</label>
+              <input id="sunriseOffset" type="number" step="1">
+            </div>
+          </div>
+
+          <div class="row" id="sunLocationRow">
+            <div>
+              <label for="latitude">Breitengrad (Latitude)</label>
+              <input id="latitude" type="number" step="0.0001" min="-90" max="90">
+            </div>
+            <div>
+              <label for="longitude">Laengengrad (Longitude)</label>
+              <input id="longitude" type="number" step="0.0001" min="-180" max="180">
+            </div>
+          </div>
+
+          <div class="row" id="sunOnlineRow">
+            <div>
+              <label for="sunOnline">Sonnenzeiten online abrufen</label>
+              <select id="sunOnline"><option value="true">ja (mit Offline-Fallback)</option><option value="false">nein (nur Berechnung)</option></select>
+            </div>
+            <div></div>
+          </div>
+          <p class="hint" id="sunHint"></p>
         </div>
 
         <div class="card">
@@ -397,8 +431,15 @@
         q("espLedPin").value = c.espMotionLedPin ?? 32;
         q("espInvert").value = String(Boolean(c.espMotionInvert));
         q("windowEnabled").value = String(Boolean(c.timeWindowEnabled));
+        q("windowMode").value = c.windowUseSun ? "sun" : "fixed";
         q("start").value = c.motionStartHHMM || minsToHHMM(c.motionStartMin || 0);
         q("end").value = c.motionEndHHMM || minsToHHMM(c.motionEndMin || 0);
+        q("sunsetOffset").value = c.sunsetOffsetMin ?? 0;
+        q("sunriseOffset").value = c.sunriseOffsetMin ?? 0;
+        q("latitude").value = c.latitude ?? 52.52;
+        q("longitude").value = c.longitude ?? 13.405;
+        q("sunOnline").value = String(c.sunOnlineLookup ?? true);
+        updateWindowModeVisibility();
         q("ntp").value = c.ntpServer || "pool.ntp.org";
         q("gmt").value = c.gmtOffsetSec ?? 3600;
         q("dst").value = c.daylightOffsetSec ?? 3600;
@@ -424,6 +465,12 @@
           timeWindowEnabled: q("windowEnabled").value === "true",
           motionStartMin: toMins(q("start").value),
           motionEndMin: toMins(q("end").value),
+          windowUseSun: q("windowMode").value === "sun",
+          sunsetOffsetMin: Number(q("sunsetOffset").value),
+          sunriseOffsetMin: Number(q("sunriseOffset").value),
+          latitude: Number(q("latitude").value),
+          longitude: Number(q("longitude").value),
+          sunOnlineLookup: q("sunOnline").value === "true",
           ntpServer: q("ntp").value.trim(),
           gmtOffsetSec: Number(q("gmt").value),
           daylightOffsetSec: Number(q("dst").value)
@@ -450,7 +497,30 @@
         q("menuPanel").classList.toggle("open");
       });
 
+      function updateWindowModeVisibility() {
+        const useSun = q("windowMode").value === "sun";
+        q("fixedWindowRow").style.display = useSun ? "none" : "";
+        q("sunWindowRow").style.display = useSun ? "" : "none";
+        q("sunLocationRow").style.display = useSun ? "" : "none";
+        q("sunOnlineRow").style.display = useSun ? "" : "none";
+      }
+
+      q("windowMode").addEventListener("change", updateWindowModeVisibility);
+
+      async function loadSunHint() {
+        try {
+          const r = await fetch("/api/state");
+          const s = await r.json();
+          if (s.sunrise && s.sunset) {
+            q("sunHint").textContent = `Heute berechnet: Sonnenaufgang ${s.sunrise}, Sonnenuntergang ${s.sunset}`;
+          }
+        } catch (e) {
+          // Ignorieren, Hinweis bleibt leer
+        }
+      }
+
       loadConfig();
+      loadSunHint();
     </script>
   </body>
 </html>

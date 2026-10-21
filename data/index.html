@@ -11,44 +11,143 @@
     <style>
       :root {
         color-scheme: light;
-        --bg: #f3efe7;
-        --card: #ffffff;
-        --text: #1f1a14;
-        --accent: #7b341e;
-        --accent-2: #c05621;
-        --muted: #6b5f52;
+        --bg: #f1f4ee;
+        --card: #fcfdf9;
+        --text: #202b25;
+        --forest: #193d32;
+        --green: #23734b;
+        --lime: #d6eb91;
+        --amber: #dfa43e;
+        --muted: #66736a;
+        --line: #dbe3da;
+        --soft: #f3f6f1;
       }
       body {
         margin: 0;
-        font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
-        background: radial-gradient(circle at 10% 10%, #fff6e8 0%, var(--bg) 45%, #e6dccf 100%);
+        font-family: "Segoe UI Variable", "Bahnschrift", "Segoe UI", sans-serif;
+        background: linear-gradient(180deg, #e5eee6 0, var(--bg) 260px);
         color: var(--text);
         -webkit-text-size-adjust: 100%;
       }
       .wrap {
-        max-width: 980px;
-        margin: 18px auto;
-        padding: 0 12px 18px;
+        max-width: 1100px;
+        margin: 24px auto;
+        padding: 0 18px 24px;
       }
       .grid {
         display: grid;
-        gap: 14px;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        align-items: start;
+        gap: 16px;
+        grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
       }
       .card {
         background: var(--card);
-        border-radius: 14px;
-        padding: 14px;
-        box-shadow: 0 10px 26px rgba(71, 46, 30, 0.11);
-        border: 1px solid #eadfce;
+        border-radius: 8px;
+        padding: 18px;
+        box-shadow: 0 8px 24px rgba(28, 52, 39, 0.07);
+        border: 1px solid var(--line);
+      }
+      .masthead {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 22px;
+        margin-bottom: 16px;
+        padding: 22px 24px;
+        border: 1px solid #254c40;
+        border-radius: 8px;
+        background: var(--forest);
+        color: #f4f5e9;
+        box-shadow: 0 12px 28px rgba(25, 61, 50, 0.16);
+      }
+      .brand-mark {
+        margin: 0 0 5px;
+        color: var(--lime);
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
       }
       h1 {
-        margin: 0 0 8px;
-        font-size: 1.35rem;
+        margin: 0;
+        font-size: 1.7rem;
+        font-weight: 650;
+      }
+      .connection {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-top: 12px;
+      }
+      .connection .hint {
+        color: #c7d7cd;
+      }
+      .auto-control {
+        min-width: 174px;
+        padding-left: 22px;
+        border-left: 1px solid rgba(242, 247, 238, 0.2);
+      }
+      .auto-label,
+      .section-kicker {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .auto-label {
+        color: #c7d7cd;
+      }
+      .automation-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 38px;
+        padding: 6px 11px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #f4f5e9;
+      }
+      .automation-switch::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #a7b3aa;
+      }
+      .automation-switch.is-on {
+        border-color: rgba(214, 235, 145, 0.55);
+        background: rgba(214, 235, 145, 0.12);
+        color: var(--lime);
+      }
+      .automation-switch.is-on::before {
+        background: var(--lime);
+        box-shadow: 0 0 10px rgba(214, 235, 145, 0.55);
+      }
+      .action-result {
+        min-height: 20px;
+        margin: -5px 2px 14px;
+        font-size: 0.85rem;
       }
       h2 {
-        margin: 0 0 8px;
-        font-size: 1.05rem;
+        margin: 0;
+        font-size: 1.08rem;
+        font-weight: 650;
+      }
+      .card-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .lamp-count {
+        padding: 4px 8px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        color: var(--muted);
+        font-size: 0.75rem;
       }
       .hint {
         margin: 0;
@@ -56,51 +155,133 @@
         font-size: 0.86rem;
       }
       .status {
-        margin-top: 8px;
+        margin-top: 12px;
         font-family: Consolas, "Courier New", monospace;
         white-space: pre-wrap;
-        background: #f8f5ef;
-        border-radius: 10px;
-        padding: 10px;
-        font-size: 0.84rem;
-        max-height: 210px;
+        background: #202e28;
+        color: #d8e6dc;
+        border-radius: 6px;
+        padding: 12px;
+        font-size: 0.78rem;
+        max-height: 240px;
         overflow: auto;
       }
       .debuglog {
         font-family: Consolas, "Courier New", monospace;
         white-space: pre-wrap;
-        background: #fffaf3;
-        border: 1px solid #ecdcc5;
-        border-radius: 10px;
-        padding: 10px;
-        font-size: 0.83rem;
-        min-height: 200px;
-        max-height: 340px;
+        background: var(--soft);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 12px;
+        font-size: 0.78rem;
+        min-height: 180px;
+        max-height: 300px;
         overflow: auto;
       }
       .actions {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
+        gap: 9px;
+      }
+      .relay-list {
+        display: grid;
+        gap: 7px;
+      }
+      .relay-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 52px;
+        padding: 7px 10px 7px 13px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        transition: border-color 160ms ease, background-color 160ms ease;
+      }
+      .relay-row:has(.relay-toggle[aria-pressed="true"]) {
+        border-color: #a9cdb5;
+        background: #f5faf4;
+      }
+      .relay-name {
+        font-weight: 600;
+      }
+      .relay-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 94px;
+        min-height: 38px;
+        padding: 5px 10px;
+        border: 1px solid #d5ddd5;
+        border-radius: 6px;
+        background: #f0f3ef;
+        color: #526057;
+        transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+      }
+      .relay-toggle::before {
+        content: "";
+        width: 28px;
+        height: 16px;
+        border-radius: 999px;
+        background: #aab5ad;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+        transition: background-color 160ms ease;
+      }
+      .relay-toggle::after {
+        content: "";
+        position: absolute;
+        top: 13px;
+        left: 12px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+        transition: transform 160ms ease;
+      }
+      .relay-toggle {
+        position: relative;
+      }
+      .relay-toggle[aria-pressed="true"] {
+        border-color: #a9cdb5;
+        background: #e9f4eb;
+        color: #175c38;
+      }
+      .relay-toggle[aria-pressed="true"]::before {
+        background: var(--green);
+      }
+      .relay-toggle[aria-pressed="true"]::after {
+        transform: translateX(12px);
+      }
+      button:focus-visible,
+      a:focus-visible {
+        outline: 3px solid var(--amber);
+        outline-offset: 2px;
+      }
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
       }
       button,
       .linkbtn {
         border: 0;
-        border-radius: 10px;
-        padding: 10px 12px;
-        min-height: 40px;
+        border-radius: 6px;
+        padding: 10px 13px;
+        min-height: 42px;
         font-weight: 600;
         cursor: pointer;
         text-align: center;
         text-decoration: none;
       }
       .primary {
-        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+        background: var(--forest);
         color: #fff;
       }
       .ghost {
-        background: #f8eee3;
-        color: #52290f;
+        background: var(--soft);
+        color: var(--text);
+        border: 1px solid var(--line);
       }
       .toggle {
         display: flex;
@@ -110,71 +291,136 @@
         margin: 10px 0 4px;
       }
       .ok {
-        color: #0f7a35;
+        color: #1d7046;
       }
       .err {
-        color: #aa1f2d;
+        color: #a33434;
       }
-      @media (max-width: 680px) {
+      .side-stack {
+        display: grid;
+        gap: 16px;
+      }
+      .card-links {
+        margin-top: 10px;
+      }
+      .card-links .linkbtn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      @media (max-width: 760px) {
         .wrap {
-          margin: 10px auto;
-          padding: 0 10px 12px;
+          margin: 14px auto;
+          padding: 0 12px 18px;
+        }
+        .masthead {
+          grid-template-columns: 1fr;
+          gap: 16px;
+          padding: 18px;
+        }
+        .auto-control {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 0 0;
+          border-top: 1px solid rgba(242, 247, 238, 0.2);
+          border-left: 0;
+        }
+        .auto-label {
+          margin: 0;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+        }
+        .actions {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .side-stack {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 380px) {
+        .card {
+          padding: 14px;
         }
         .actions {
           grid-template-columns: 1fr;
+        }
+        .connection {
+          display: grid;
+          gap: 5px;
         }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <div class="card">
-        <h1>Treppenhauslicht Startseite</h1>
-        <p class="hint" id="ipSummary">STA: - | AP: -</p>
-        <p class="hint" id="espClock">ESP Uhrzeit: -</p>
-        <div class="toggle">
-          <strong>Automatikbetrieb</strong>
-          <button id="automationBtn" class="ghost" type="button">-</button>
+      <header class="masthead">
+        <div>
+          <p class="brand-mark">Hauszentrale / Lichtsteuerung</p>
+          <h1>Treppenhauslicht</h1>
+          <div class="connection">
+            <p class="hint" id="ipSummary">STA: - | AP: -</p>
+            <p class="hint" id="espClock">ESP Uhrzeit: -</p>
+          </div>
         </div>
-        <p id="actionResult" class="hint">Bereit.</p>
-      </div>
+        <div class="auto-control">
+          <span class="auto-label">Automatikbetrieb</span>
+          <button id="automationBtn" class="automation-switch" type="button" aria-pressed="false">-</button>
+        </div>
+      </header>
+      <p id="actionResult" class="hint action-result" role="status" aria-live="polite">Bereit.</p>
 
       <div class="grid">
         <div class="card">
-          <h2>Lichtsteuerung</h2>
-          <div class="actions" style="margin-bottom:8px">
+          <div class="card-heading">
+            <div>
+              <span class="section-kicker">Manuelle Steuerung</span>
+              <h2>Lichtbereiche</h2>
+            </div>
+            <span class="lamp-count">5 Kanaele</span>
+          </div>
+          <div class="actions" style="margin-bottom:12px">
             <button class="primary" type="button" id="allOnBtn">Alle EIN</button>
             <button class="ghost" type="button" id="allOffBtn">Alle AUS</button>
           </div>
-          <div class="actions">
-            <button class="ghost" type="button" data-node="102" data-ch="0" data-on="1">Treppe EIN</button>
-            <button class="ghost" type="button" data-node="102" data-ch="0" data-on="0">Treppe AUS</button>
-            <button class="ghost" type="button" data-node="103" data-ch="0" data-on="1">Gang Hinten 0 EIN</button>
-            <button class="ghost" type="button" data-node="103" data-ch="0" data-on="0">Gang Hinten 0 AUS</button>
-            <button class="ghost" type="button" data-node="103" data-ch="1" data-on="1">Gang Hinten 1 EIN</button>
-            <button class="ghost" type="button" data-node="103" data-ch="1" data-on="0">Gang Hinten 1 AUS</button>
-            <button class="ghost" type="button" data-node="104" data-ch="0" data-on="1">Gang Vorne 0 EIN</button>
-            <button class="ghost" type="button" data-node="104" data-ch="0" data-on="0">Gang Vorne 0 AUS</button>
-            <button class="ghost" type="button" data-node="104" data-ch="1" data-on="1">Gang Vorne 1 EIN</button>
-            <button class="ghost" type="button" data-node="104" data-ch="1" data-on="0">Gang Vorne 1 AUS</button>
+          <div class="relay-list">
+            <div class="relay-row"><span class="relay-name">Treppe</span><button class="relay-toggle" type="button" data-node="102" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
+            <div class="relay-row"><span class="relay-name">Gang hinten 0</span><button class="relay-toggle" type="button" data-node="103" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
+            <div class="relay-row"><span class="relay-name">Gang hinten 1</span><button class="relay-toggle" type="button" data-node="103" data-ch="1" aria-pressed="false"><span>AUS</span></button></div>
+            <div class="relay-row"><span class="relay-name">Gang vorne 0</span><button class="relay-toggle" type="button" data-node="104" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
+            <div class="relay-row"><span class="relay-name">Gang vorne 1</span><button class="relay-toggle" type="button" data-node="104" data-ch="1" aria-pressed="false"><span>AUS</span></button></div>
           </div>
         </div>
 
-        <div class="card">
-          <h2>Status</h2>
-          <div class="status" id="statusBox">Lade...</div>
-          <div class="actions" style="margin-top:8px">
-            <a class="linkbtn ghost" href="/settings.html">Einstellungen</a>
-            <a class="linkbtn ghost" href="/update">OTA Update</a>
+        <div class="side-stack">
+          <div class="card">
+            <div class="card-heading">
+              <div>
+                <span class="section-kicker">System</span>
+                <h2>Status</h2>
+              </div>
+            </div>
+            <div class="status" id="statusBox">Lade...</div>
+            <div class="actions card-links">
+              <a class="linkbtn ghost" href="/settings.html">Einstellungen</a>
+              <a class="linkbtn ghost" href="/update">OTA Update</a>
+            </div>
           </div>
-        </div>
 
-        <div class="card">
-          <h2>Debug Log</h2>
-          <div class="debuglog" id="logBox">Lade Debug-Ausgaben...</div>
-          <div class="actions" style="margin-top:8px">
-            <button class="ghost" id="refreshLogBtn" type="button">Log aktualisieren</button>
-            <button class="ghost" id="clearLogBtn" type="button">Log leeren</button>
+          <div class="card">
+            <div class="card-heading">
+              <div>
+                <span class="section-kicker">Diagnose</span>
+                <h2>Debug Log</h2>
+              </div>
+            </div>
+            <div class="debuglog" id="logBox">Lade Debug-Ausgaben...</div>
+            <div class="actions card-links">
+              <button class="ghost" id="refreshLogBtn" type="button">Log aktualisieren</button>
+              <button class="ghost" id="clearLogBtn" type="button">Log leeren</button>
+            </div>
           </div>
         </div>
       </div>
@@ -195,7 +441,18 @@
       function setActionResult(text, ok = true) {
         const el = q("actionResult");
         el.textContent = text;
-        el.className = ok ? "hint ok" : "hint err";
+        el.className = `hint action-result ${ok ? "ok" : "err"}`;
+      }
+
+      function setRelayToggle(button, on) {
+        button.setAttribute("aria-pressed", String(on));
+        const name = button.closest(".relay-row").querySelector(".relay-name").textContent;
+        button.setAttribute("aria-label", `${name}: ${on ? "EIN" : "AUS"}`);
+        button.querySelector("span").textContent = on ? "EIN" : "AUS";
+      }
+
+      function setRelayToggles(on) {
+        document.querySelectorAll(".relay-toggle").forEach((button) => setRelayToggle(button, on));
       }
 
       async function postJson(url, payload) {
@@ -221,7 +478,13 @@
         const autoOn = Boolean(s.automationEnabled);
         autoBtn.textContent = autoOn ? "Automatik EIN" : "Automatik AUS";
         autoBtn.dataset.enabled = autoOn ? "1" : "0";
-        autoBtn.className = autoOn ? "primary" : "ghost";
+        autoBtn.classList.toggle("is-on", autoOn);
+        autoBtn.setAttribute("aria-pressed", String(autoOn));
+
+        if (!window.relayTogglesInitialized) {
+          setRelayToggles(Boolean(s.relayState));
+          window.relayTogglesInitialized = true;
+        }
 
         q("statusBox").textContent = JSON.stringify(s, null, 2);
       }
@@ -239,12 +502,14 @@
 
       async function setAll(on) {
         await postJson("/api/manual/relay", { all: true, on });
+        setRelayToggles(on);
         setActionResult(on ? "Alle Kanaele eingeschaltet." : "Alle Kanaele ausgeschaltet.");
         await loadStatus();
       }
 
-      async function setSingle(node, channel, on) {
+      async function setSingle(node, channel, on, button) {
         await postJson("/api/manual/relay", { node, channel, on });
+        setRelayToggle(button, on);
         setActionResult(`${relayName(node, channel)} -> ${on ? "EIN" : "AUS"}`);
         await loadStatus();
       }
@@ -263,12 +528,15 @@
       q("refreshLogBtn").addEventListener("click", () => loadLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
       q("clearLogBtn").addEventListener("click", () => clearLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
 
-      document.querySelectorAll("button[data-node]").forEach((btn) => {
+      document.querySelectorAll(".relay-toggle[data-node]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const node = Number(btn.dataset.node);
           const channel = Number(btn.dataset.ch);
-          const on = btn.dataset.on === "1";
-          setSingle(node, channel, on).catch((e) => setActionResult(`Fehler: ${e.message}`, false));
+          const on = btn.getAttribute("aria-pressed") !== "true";
+          btn.disabled = true;
+          setSingle(node, channel, on, btn)
+            .catch((e) => setActionResult(`Fehler: ${e.message}`, false))
+            .finally(() => { btn.disabled = false; });
         });
       });
 

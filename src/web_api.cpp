@@ -41,7 +41,19 @@ String buildStateJson(const AppConfig &cfg, const LightingController &controller
   doc["automationEnabled"] = controller.getAutomationEnabled();
   doc["shortOverrideActive"] = controller.shortOverrideActive();
   doc["timeWindowActive"] = controller.isMotionWindowActive();
-  doc["timeWindow"] = String(hhmmFromMinutes(cfg.motionStartMin) + "-" + hhmmFromMinutes(cfg.motionEndMin));
+  uint16_t windowStartMin = 0;
+  uint16_t windowEndMin = 0;
+  if (controller.getEffectiveWindow(windowStartMin, windowEndMin)) {
+    doc["timeWindow"] = String(hhmmFromMinutes(windowStartMin) + "-" + hhmmFromMinutes(windowEndMin));
+  } else {
+    doc["timeWindow"] = "unbekannt";
+  }
+  int sunriseMin = 0;
+  int sunsetMin = 0;
+  if (controller.getSunTimes(sunriseMin, sunsetMin)) {
+    doc["sunrise"] = hhmmFromMinutes((uint16_t)sunriseMin);
+    doc["sunset"] = hhmmFromMinutes((uint16_t)sunsetMin);
+  }
   doc["epoch"] = (uint32_t)now;
   doc["espTimeLocal"] = localTimeBuf;
 
@@ -74,6 +86,12 @@ String buildConfigJson(const AppConfig &cfg)
   doc["motionEndMin"] = cfg.motionEndMin;
   doc["motionStartHHMM"] = hhmmFromMinutes(cfg.motionStartMin);
   doc["motionEndHHMM"] = hhmmFromMinutes(cfg.motionEndMin);
+  doc["windowUseSun"] = cfg.windowUseSun;
+  doc["sunOnlineLookup"] = cfg.sunOnlineLookup;
+  doc["latitude"] = cfg.latitude;
+  doc["longitude"] = cfg.longitude;
+  doc["sunriseOffsetMin"] = cfg.sunriseOffsetMin;
+  doc["sunsetOffsetMin"] = cfg.sunsetOffsetMin;
   doc["ntpServer"] = cfg.ntpServer;
   doc["gmtOffsetSec"] = cfg.gmtOffsetSec;
   doc["daylightOffsetSec"] = cfg.daylightOffsetSec;
@@ -141,6 +159,24 @@ void applyJsonConfig(const JsonDocument &doc, AppConfig &cfg)
   }
   if (doc["motionEndMin"].is<int>()) {
     cfg.motionEndMin = (uint16_t)constrain(doc["motionEndMin"].as<int>(), 0, 1439);
+  }
+  if (doc["windowUseSun"].is<bool>()) {
+    cfg.windowUseSun = doc["windowUseSun"].as<bool>();
+  }
+  if (doc["sunOnlineLookup"].is<bool>()) {
+    cfg.sunOnlineLookup = doc["sunOnlineLookup"].as<bool>();
+  }
+  if (doc["latitude"].is<double>() || doc["latitude"].is<int>()) {
+    cfg.latitude = constrain(doc["latitude"].as<double>(), -90.0, 90.0);
+  }
+  if (doc["longitude"].is<double>() || doc["longitude"].is<int>()) {
+    cfg.longitude = constrain(doc["longitude"].as<double>(), -180.0, 180.0);
+  }
+  if (doc["sunriseOffsetMin"].is<int>()) {
+    cfg.sunriseOffsetMin = (int16_t)constrain(doc["sunriseOffsetMin"].as<int>(), -180, 180);
+  }
+  if (doc["sunsetOffsetMin"].is<int>()) {
+    cfg.sunsetOffsetMin = (int16_t)constrain(doc["sunsetOffsetMin"].as<int>(), -180, 180);
   }
   if (doc["ntpServer"].is<String>()) {
     cfg.ntpServer = doc["ntpServer"].as<String>();

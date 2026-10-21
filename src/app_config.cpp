@@ -33,6 +33,12 @@ bool saveConfig(const AppConfig &cfg)
   doc["automationEnabled"] = cfg.automationEnabled;
   doc["motionStartMin"] = cfg.motionStartMin;
   doc["motionEndMin"] = cfg.motionEndMin;
+  doc["windowUseSun"] = cfg.windowUseSun;
+  doc["sunOnlineLookup"] = cfg.sunOnlineLookup;
+  doc["latitude"] = cfg.latitude;
+  doc["longitude"] = cfg.longitude;
+  doc["sunriseOffsetMin"] = cfg.sunriseOffsetMin;
+  doc["sunsetOffsetMin"] = cfg.sunsetOffsetMin;
   doc["ntpServer"] = cfg.ntpServer;
   doc["gmtOffsetSec"] = cfg.gmtOffsetSec;
   doc["daylightOffsetSec"] = cfg.daylightOffsetSec;
@@ -87,6 +93,12 @@ bool loadConfig(AppConfig &cfg)
   cfg.automationEnabled = doc["automationEnabled"] | cfg.automationEnabled;
   cfg.motionStartMin = doc["motionStartMin"] | cfg.motionStartMin;
   cfg.motionEndMin = doc["motionEndMin"] | cfg.motionEndMin;
+  cfg.windowUseSun = doc["windowUseSun"] | cfg.windowUseSun;
+  cfg.sunOnlineLookup = doc["sunOnlineLookup"] | cfg.sunOnlineLookup;
+  cfg.latitude = doc["latitude"] | cfg.latitude;
+  cfg.longitude = doc["longitude"] | cfg.longitude;
+  cfg.sunriseOffsetMin = doc["sunriseOffsetMin"] | cfg.sunriseOffsetMin;
+  cfg.sunsetOffsetMin = doc["sunsetOffsetMin"] | cfg.sunsetOffsetMin;
   cfg.ntpServer = doc["ntpServer"] | cfg.ntpServer;
   cfg.gmtOffsetSec = doc["gmtOffsetSec"] | cfg.gmtOffsetSec;
   cfg.daylightOffsetSec = doc["daylightOffsetSec"] | cfg.daylightOffsetSec;

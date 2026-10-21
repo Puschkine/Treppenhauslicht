@@ -22,6 +22,12 @@ struct AppConfig {
   bool automationEnabled = true;
   uint16_t motionStartMin = 0;
   uint16_t motionEndMin = 0;
+  bool windowUseSun = false;
+  bool sunOnlineLookup = true;
+  double latitude = 52.5200;
+  double longitude = 13.4050;
+  int16_t sunriseOffsetMin = 0;
+  int16_t sunsetOffsetMin = 0;
   String ntpServer = "pool.ntp.org";
   long gmtOffsetSec = 3600;
   int daylightOffsetSec = 3600;

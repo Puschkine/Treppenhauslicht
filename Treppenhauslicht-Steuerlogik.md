@@ -49,6 +49,11 @@ Langer Tastendruck:
 
 ### Zeitfenster fuer BWM Logik
 - Zeitfenster ist konfigurierbar (von/bis)
+- Alternativ kann das Zeitfenster an Sonnenauf-/untergang gekoppelt werden (windowUseSun)
+  - Fensterbeginn = Sonnenuntergang - sunsetOffsetMin
+  - Fensterende = Sonnenaufgang + sunriseOffsetMin
+  - Sonnenzeiten werden bei bestehender WLAN-Verbindung online abgerufen (sunrise-sunset.org API, sunOnlineLookup) und pro Tag zwischengespeichert
+  - Ohne Internet oder wenn sunOnlineLookup deaktiviert ist, werden die Sonnenzeiten lokal per Formel aus Latitude/Longitude berechnet
 - Innerhalb des Fensters arbeitet BWM Automatik normal
 - Ausserhalb des Fensters ist BWM Automatik aus
 - Tasterfunktion bleibt immer moeglich

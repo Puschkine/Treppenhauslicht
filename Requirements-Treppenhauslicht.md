@@ -162,6 +162,12 @@ Konfigurierbare Parameter:
 - timeWindowEnabled
 - motionStartMin
 - motionEndMin
+- windowUseSun
+- sunOnlineLookup
+- latitude
+- longitude
+- sunriseOffsetMin
+- sunsetOffsetMin
 - ntpServer
 - gmtOffsetSec
 - daylightOffsetSec
@@ -186,6 +192,12 @@ Defaultwerte:
 - timeWindowEnabled = false
 - motionStartMin = 0
 - motionEndMin = 0
+- windowUseSun = false
+- sunOnlineLookup = true
+- latitude = 52.52
+- longitude = 13.405
+- sunriseOffsetMin = 0
+- sunsetOffsetMin = 0
 - ntpServer = pool.ntp.org
 - gmtOffsetSec = 3600
 - daylightOffsetSec = 3600

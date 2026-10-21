@@ -26,6 +26,8 @@ public:
   bool shortOverrideActive() const;
   uint8_t activeMotionCount() const;
   bool isMotionWindowActive() const;
+  bool getSunTimes(int &sunriseMin, int &sunsetMin) const;
+  bool getEffectiveWindow(uint16_t &startMin, uint16_t &endMin) const;
   bool setSingleLampRelay(uint16_t node, uint8_t relay, bool on);
   void setAllLampsManual(bool on);
   void setAutomationEnabled(bool enabled);
@@ -55,6 +57,11 @@ private:
   bool pollHealthy103 = true;
   bool pollHealthy104 = true;
 
+  mutable int sunCacheYday = -1;
+  mutable int sunCacheSunriseMin = -1;
+  mutable int sunCacheSunsetMin = -1;
+  mutable unsigned long nextSunFetchMs = 0;
+
   static const unsigned long ESP_DEBOUNCE_MS = 120;
   static const unsigned long AUTO_RETRIGGER_GUARD_MS = 2000;
 
@@ -64,6 +71,8 @@ private:
   void applyMotionPlausibilityTimeouts();
   void pollShellyInputs();
   bool queryShellyInputState(const String &ip, uint8_t channel, bool &state) const;
+  bool resolveSunTimes(int &sunriseMin, int &sunsetMin) const;
+  bool fetchSunTimesOnline(int &sunriseMin, int &sunsetMin) const;
   void evaluateLighting();
   bool computeDesiredOn() const;
   void setRelayState(bool on, const String &reason);
