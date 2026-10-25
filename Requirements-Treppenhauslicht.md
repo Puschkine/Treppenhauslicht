@@ -137,6 +137,7 @@ NTP-Server muss konfigurierbar sein.
 
 ### TIME-02 Zeitzone
 GMT-Offset und DST-Offset muessen konfigurierbar sein.
+Die automatische Sommerzeitumstellung folgt der EU-Regel (letzter Sonntag im Maerz und Oktober).
 
 ### TIME-03 Nutzung der Uhrzeit
 Zeitdaten muessen fuer das BWM-Zeitfenster verwendet werden.
@@ -205,7 +206,7 @@ Defaultwerte:
 ## 11. API-Anforderungen
 ### API-Status
 - GET /status
-- GET /api/state
+- GET /api/status
 
 ### API-Config
 - GET /api/config
@@ -216,6 +217,8 @@ Defaultwerte:
 - GET /api/event/button?type=short|long
 
 ### API-Steuerung
+- POST /api/manual/relay mit JSON `{"all":true,"on":true}` schaltet alle fuenf Lampenkanaele ein; mit `"on":false` werden sie ausgeschaltet.
+- POST /api/manual/relay mit JSON `{"node":103,"channel":1,"on":true}` schaltet einen einzelnen Lampenkanal. `node` kann 102, 103 oder 104 sein; `channel` ist 0 oder 1. Shelly 102 unterstuetzt nur Kanal 0. Zum Ausschalten `"on":false` setzen.
 - POST /api/force/off
 
 ### API-Debug

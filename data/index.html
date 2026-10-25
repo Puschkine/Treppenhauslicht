@@ -467,7 +467,7 @@
       }
 
       async function loadStatus() {
-        const r = await fetch("/api/state");
+        const r = await fetch("/api/status");
         const s = await r.json();
         const staIp = s.ipSta || s.ip || "-";
         const apIp = s.ipAp || "-";

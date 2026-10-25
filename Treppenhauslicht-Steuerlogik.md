@@ -60,7 +60,7 @@ Langer Tastendruck:
 
 ### NTP
 - NTP Server konfigurierbar
-- GMT Offset und DST Offset konfigurierbar
+- GMT Offset und DST Offset konfigurierbar; automatische Sommerzeitumstellung nach EU-Regel (letzter Sonntag im Maerz und Oktober)
 - Uhrzeit wird fuer Zeitfensterlogik genutzt
 
 ## Konfigurierbare Parameter im Webserver
@@ -130,7 +130,7 @@ Die Firmware ist modular aufgebaut. Der Einstieg liegt in main.cpp, Logik und AP
 
 ### data/index.html
 - Weboberflaeche fuer Konfiguration und Live-Status
-- Nutzt die Endpunkte /api/config, /api/state und Event-Testaufrufe
+- Nutzt die Endpunkte /api/config, /api/status und Event-Testaufrufe
 - Dient als Bedienoberflaeche fuer Inbetriebnahme und Wartung
 
 ## Webhook Matrix (tatsaechliche URLs)
@@ -171,11 +171,15 @@ Die genaue Bezeichnung der Menuepunkte kann je nach Shelly Firmware leicht abwei
 ## API Uebersicht am ESP
 - Status:
   - GET /status
-  - GET /api/state
+  - GET /api/status
 
 - Konfiguration:
   - GET /api/config
   - POST /api/config
+
+- Lampensteuerung:
+  - POST /api/manual/relay mit `{"all":true,"on":true}` fuer alle Lampen; `"on":false` schaltet sie aus
+  - POST /api/manual/relay mit `{"node":103,"channel":1,"on":true}` fuer eine einzelne Lampe; node 102/103/104 und channel 0/1 (Shelly 102 nur Kanal 0), `"on":false` schaltet aus
 
 - Events:
   - GET /api/event/motion?node=103|104|esp&channel=0|1&state=0|1
@@ -187,7 +191,7 @@ Die genaue Bezeichnung der Menuepunkte kann je nach Shelly Firmware leicht abwei
 ## Hinweise fuer Inbetriebnahme
 1. In den Shelly Webhook/Action Einstellungen die URLs aus der Matrix eintragen.
 2. Im ESP Webserver alle IPs und Kanaele korrekt setzen.
-3. NTP und Zeitzone passend konfigurieren (Mitteleuropa typischerweise GMT 3600, DST 3600).
+3. NTP und Zeitzone passend konfigurieren (Mitteleuropa typischerweise GMT 3600, DST 3600; automatische EU-Umstellung).
 4. Funktionstest durchfuehren:
    - BWM EIN an 103/104 pruefen
    - BWM AUS und Nachlauf pruefen

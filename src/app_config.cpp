@@ -6,9 +6,41 @@
 
 #include "debug_log.h"
 
+namespace {
+
+String posixOffset(long long utcOffsetSec)
+{
+  const long long posixOffsetSec = -utcOffsetSec;
+  const char sign = posixOffsetSec < 0 ? '-' : '+';
+  const unsigned long long magnitude = posixOffsetSec < 0
+                                           ? (unsigned long long)(-posixOffsetSec)
+                                           : (unsigned long long)posixOffsetSec;
+  char value[24];
+  snprintf(value, sizeof(value), "%c%llu:%02llu:%02llu",
+           sign,
+           magnitude / 3600,
+           (magnitude % 3600) / 60,
+           magnitude % 60);
+  return String(value);
+}
+
+String buildTimeZone(const AppConfig &cfg)
+{
+  String timeZone = "STD" + posixOffset(cfg.gmtOffsetSec);
+  if (cfg.daylightOffsetSec != 0) {
+    timeZone += "DST";
+    timeZone += posixOffset((long long)cfg.gmtOffsetSec + cfg.daylightOffsetSec);
+    timeZone += ",M3.5.0/2,M10.5.0/3";
+  }
+  return timeZone;
+}
+
+} // namespace
+
 void applyTimeConfig(const AppConfig &cfg)
 {
-  configTime(cfg.gmtOffsetSec, cfg.daylightOffsetSec, cfg.ntpServer.c_str());
+  const String timeZone = buildTimeZone(cfg);
+  configTzTime(timeZone.c_str(), cfg.ntpServer.c_str());
 }
 
 bool saveConfig(const AppConfig &cfg)

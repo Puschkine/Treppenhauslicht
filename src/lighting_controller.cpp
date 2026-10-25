@@ -106,6 +106,8 @@ void LightingController::loop()
 
 void LightingController::onConfigUpdated()
 {
+  sunCacheYday = -1;
+  nextSunFetchMs = 0;
   begin();
   evaluateLighting();
 }
@@ -326,7 +328,8 @@ bool LightingController::resolveSunTimes(int &sunriseMin, int &sunsetMin) const
     nextSunFetchMs = millis() + 5UL * 60UL * 1000UL; // Fehler: in 5 Minuten erneut versuchen
   }
 
-  double utcOffsetHours = (cfg.gmtOffsetSec + cfg.daylightOffsetSec) / 3600.0;
+  const long daylightOffset = localTime.tm_isdst > 0 ? cfg.daylightOffsetSec : 0;
+  double utcOffsetHours = (cfg.gmtOffsetSec + daylightOffset) / 3600.0;
   bool haveSunrise = computeSunEvent(localTime.tm_yday + 1, cfg.latitude, cfg.longitude, utcOffsetHours, true, sunriseMin);
   bool haveSunset = computeSunEvent(localTime.tm_yday + 1, cfg.latitude, cfg.longitude, utcOffsetHours, false, sunsetMin);
   return haveSunrise && haveSunset;

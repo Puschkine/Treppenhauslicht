@@ -199,7 +199,7 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
     request->send(200, "application/json", buildStateJson(cfg, controller));
   });
 
-  server.on("/api/state", HTTP_GET, [&](AsyncWebServerRequest *request) {
+  server.on("/api/status", HTTP_GET, [&](AsyncWebServerRequest *request) {
     request->send(200, "application/json", buildStateJson(cfg, controller));
   });
 
@@ -401,8 +401,17 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
           return;
         }
 
-        const uint16_t node = (uint16_t)doc["node"].as<int>();
-        const uint8_t channel = (uint8_t)doc["channel"].as<int>();
+        const int nodeValue = doc["node"].as<int>();
+        const int channelValue = doc["channel"].as<int>();
+        if ((nodeValue != 102 && nodeValue != 103 && nodeValue != 104) ||
+            channelValue < 0 || channelValue > 1 ||
+            (nodeValue == 102 && channelValue != 0)) {
+          request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_target\"}");
+          return;
+        }
+
+        const uint16_t node = (uint16_t)nodeValue;
+        const uint8_t channel = (uint8_t)channelValue;
         if (!controller.setSingleLampRelay(node, channel, on)) {
           request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_target\"}");
           return;
