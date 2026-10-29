@@ -1,19 +1,41 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
+#include <vector>
+
+constexpr size_t MAX_LAMPS = 32;
+constexpr size_t MAX_MOTION_SENSORS = 32;
+
+struct MotionSensorConfig {
+  String id;
+  String name;
+  bool enabled = true;
+  bool pollingEnabled = false;
+  String pollHost;
+  uint8_t pollChannel = 0;
+  String legacyNode;
+};
+
+struct LampConfig {
+  String id;
+  String name;
+  String onUrl;
+  String offUrl;
+  bool enabled = true;
+  bool automation = true;
+  bool buttonGuard = false;
+};
 
 struct AppConfig {
+  AppConfig();
   String shelly102Ip = "192.168.178.102";
-  String shelly103Ip = "192.168.178.103";
-  String shelly104Ip = "192.168.178.104";
-  uint8_t shelly103MotionChannel = 1;
-  uint8_t shelly104MotionChannel = 0;
-  uint8_t shelly103OutputChannel = 0;
-  uint8_t shelly104OutputChannel = 0;
+  std::vector<LampConfig> lamps;
+  std::vector<MotionSensorConfig> motionSensors;
+  bool espMotionEnabled = true;
   uint32_t motionOffDelayMs = 60000;
   uint32_t buttonShortOverrideMs = 120000;
   uint32_t motionEventTimeoutMs = 180000;
-  bool shellyPollingEnabled = true;
   uint32_t shellyPollIntervalMs = 5000;
   uint8_t espMotionPin = 12;
   uint8_t espMotionLedPin = 32;
@@ -33,6 +55,10 @@ struct AppConfig {
   int daylightOffsetSec = 3600;
 };
 
+void writeLampConfig(JsonArray array, const std::vector<LampConfig> &lamps);
+bool readLampConfig(JsonVariantConst value, std::vector<LampConfig> &lamps, String &error);
+void writeMotionConfig(JsonArray array, const std::vector<MotionSensorConfig> &sensors);
+bool readMotionConfig(JsonVariantConst value, std::vector<MotionSensorConfig> &sensors, String &error);
 void applyTimeConfig(const AppConfig &cfg);
 bool saveConfig(const AppConfig &cfg);
 bool loadConfig(AppConfig &cfg);

@@ -26,21 +26,22 @@ Shelly Geraete melden Events per HTTP an den ESP32. Der ESP32 entscheidet, wann 
 
 ## Umgesetzte Logik
 ### Bewegungslogik
-- Quellen: ESP BWM, Shelly 103 BWM, Shelly 104 BWM
+- Quellen: optionaler interner ESP-BWM und frei konfigurierbare externe BWM
 - Bei Flankenwechsel senden Shellys den Zustand an den ESP
-- ESP fuehrt einen aktiven BWM Zaehler
+- ESP speichert pro Melder aktiv/inaktiv und zaehlt aktive, aktivierte Melder;
+  wiederholte EIN-/AUS-Meldungen veraendern die Anzahl nicht zusaetzlich
 - Solange mindestens ein BWM aktiv ist, bleiben Lampen an
 - Wenn alle BWMs inaktiv sind, wird nach Nachlaufzeit ausgeschaltet
 - Default Nachlauf fuer BWM: 60000 ms (1 Minute)
 - Plausibilitaetspruefung: wenn ein BWM zu lange auf EIN bleibt, ohne neue Events, setzt der ESP den Zustand automatisch auf AUS (konfigurierbarer Timeout)
-- Optionales Shelly Polling: ESP fragt zyklisch die Input-Zustaende von 103/104 ab und korrigiert verlorene EIN/AUS Events
+- Optionales Shelly-Polling je externem Melder korrigiert verlorene EIN/AUS-Events
 
 ### Tasterlogik (Shelly 102)
 - Taster-Events kommen als HTTP Action am ESP an
 - Taster ueberschreibt BWM Logik
 
 Kurzer Tastendruck:
-- Wenn Licht aus: alle Lampen an, eigener Nachlauf aktiv
+- Wenn Licht aus: alle aktivierten Automatik-Lampen an, eigener Nachlauf aktiv
 - Wenn Licht an: alle Lampen aus
 - Default Nachlauf fuer Kurzdruck: 120000 ms (2 Minuten)
 
@@ -65,16 +66,12 @@ Langer Tastendruck:
 
 ## Konfigurierbare Parameter im Webserver
 - Shelly 102 IP
-- Shelly 103 IP
-- Shelly 104 IP
-- BWM Kanal fuer Shelly 103 (0 oder 1)
-- BWM Kanal fuer Shelly 104 (0 oder 1)
-- Lampen Output fuer Shelly 103 (0 oder 1)
-- Lampen Output fuer Shelly 104 (0 oder 1)
+- Internen BWM verwenden ja/nein
+- Externe BWM-Liste: Kennung, Name, aktiviert, optional Shelly-Polling, Host und Eingangskanal
+- Lampenliste: ID, Name, EIN-/AUS-URL, aktiviert, Automatik und Taster-Rueckkopplungsschutz
 - BWM Nachlaufzeit in ms
 - Kurzdruck Nachlaufzeit in ms
 - Plausi Timeout BWM Event in ms
-- Shelly Polling aktiv ja/nein
 - Shelly Polling Intervall in ms
 - ESP BWM Pin
 - ESP BWM LED Pin
@@ -84,6 +81,94 @@ Langer Tastendruck:
 - NTP Server
 - GMT Offset Sekunden
 - DST Offset Sekunden
+
+### Frei konfigurierbare Lampen
+- Bis zu 32 Lampen koennen unabhaengig vom Hersteller hinzugefuegt, benannt und entfernt werden.
+- Pro Lampe werden zwei explizite HTTP-GET-URLs hinterlegt: `onUrl` und `offUrl`.
+  Unterstuetzt werden `http://` mit Hostname oder IPv4 und optionalem Port, ohne
+  Anmeldung, Weiterleitungen oder URL-Fragmente; maximal 512 ASCII-Zeichen je URL.
+- `enabled` bestimmt, ob eine Lampe geschaltet wird. Deaktivierte Lampen duerfen
+  beide URLs leer lassen.
+- `automation` bestimmt die Teilnahme an Bewegung und Kurzdruck EIN.
+  Langdruck, Alle EIN/AUS, Kurzdruck AUS und Force OFF betreffen alle aktivierten Lampen.
+- `buttonGuard` aktiviert fuer Schaltbefehle an den Treppen-Shelly den bestehenden
+  Schutz vor Taster-Uebersprechen. Bei dessen Lampe muss die Option aktiviert bleiben.
+- Die Taster-IP und Polling-Hosts gelten fuer Tasterquelle und BWM-Polling.
+  Aenderungen daran schreiben keine Lampen-URLs um; bei einer IP-Aenderung auch
+  die betreffenden EIN-/AUS-URLs aktualisieren.
+- Alte Konfigurationen ohne `lamps` werden automatisch in fuenf Lampen ueberfuehrt
+  und gespeichert. Die bisherigen Output-Kanaele bestimmen deren Automatik-Option.
+  Eine explizit leere Liste bleibt leer.
+- Befehle werden in einer Warteschlange nacheinander ausgefuehrt (ein HTTP-Aufruf
+  pro loop-Durchlauf, je 700 ms Verbindungs-/Lesetimeout). Noch nicht begonnene
+  Befehle derselben Lampe werden durch den neuesten Sollwert ersetzt.
+  Startup-AUS wird immer ausgefuehrt, bevor ein spaeterer EIN-Befehl folgt.
+- Fehler einer Lampe verhindern keine weiteren Befehle. Es gibt keine automatische
+  Wiederholung; ein erneuter EIN-/AUS-Befehl kann manuell gesendet werden.
+- Beim Speichern wird neu initialisiert und AUS angefordert. Entfernte, deaktivierte
+  oder auf andere URLs umgestellte Lampen erhalten zuvor noch AUS an ihre alte URL.
+  Solange Befehle laufen, wird Speichern mit HTTP 409 abgelehnt; danach erneut versuchen.
+- Startseite und Einstellungen zeigen je Lampe den ausstehenden bzw. zuletzt
+  gesendeten Befehl und HTTP-Fehler, nicht einen bestaetigten Geraetezustand.
+- EIN/AUS testen ist nach dem Speichern moeglich und schaltet die echte Lampe,
+  ohne den globalen Automatik-/Dauerlichtmodus zu aendern.
+
+API:
+- `GET /api/config`: `lamps` und `maxLamps` neben den bisherigen Eingangs-/Zeitparametern.
+- `POST /api/config`: validiert die gesamte Lampenliste vor dem atomaren Speichern.
+  Der Request darf maximal 64 KiB gross sein.
+  IDs sind eindeutig, stabil und enthalten maximal 48 Buchstaben/Ziffern, `-` oder `_`;
+  Namen sind maximal 80 UTF-8-Bytes lang.
+- `POST /api/manual/relay` mit `{"id":"shelly-102-0","on":true}` oder
+  `{"all":true,"on":false}` bestaetigt die Annahme mit HTTP 202, nicht die Ausfuehrung.
+  Alte Aufrufe mit `node`/`channel` adressieren weiterhin die migrierten IDs.
+- `GET /api/status`: `lamps` mit `id`, `name`, `enabled`, `automation`, `pending`,
+  `requestedOn`, optional `lastCommandOn`, `httpCode` und `error`.
+
+### Frei konfigurierbare Bewegungsmelder
+- `espMotionEnabled` schaltet den internen BWM ein/aus (Default: ein).
+  Ausgeschaltet wird der Eingang nicht gelesen, nicht gezaehlt und die LED ist aus.
+  GPIO, Invertierung und LED-Pin bleiben einstellbar. Bei LED-Pinwechsel wird die alte LED ausgeschaltet.
+- `motionSensors` enthaelt maximal 32 externe Melder mit `id`, `name`, `enabled`,
+  `pollingEnabled`, `pollHost`, `pollChannel` und `legacyNode`.
+- Die Oberflaeche erzeugt eine stabile ID; Namen sind frei aenderbar.
+  IDs sind eindeutig, maximal 48 ASCII-Buchstaben/Ziffern, `-` oder `_`;
+  `esp` ist fuer den lokalen Melder reserviert. Namen sind maximal 80 UTF-8-Bytes lang.
+- Jeder Melder sendet EIN und AUS an:
+  `http://<ESP-IP>/api/event/motion?id=<id>&state=1` bzw. `state=0`.
+  Die Einstellungen zeigen kopierbare URLs passend zur aufgerufenen ESP-Adresse an.
+  Ohne sichere Zwischenablage-API wird die URL zum manuellen Kopieren markiert.
+- Unbekannte/deaktivierte Melder und fehlende/ungueltige Zustaende werden mit HTTP 400 abgelehnt
+  und geloggt. Erlaubte Zustaende: `0`, `1`, `false`, `true`, `off`, `on`.
+  `id` hat Vorrang vor den bisherigen Quellenparametern.
+- Alte Konfigurationen ohne `motionSensors` werden automatisch und persistent migriert:
+  Shelly 103 -> `bwm-103`, Shelly 104 -> `bwm-104`; bisherige IPs, Eingangskanaele
+  und globale Polling-Auswahl werden uebernommen. Leere IP deaktiviert den Melder.
+  Eine explizit leere Liste bleibt leer; der lokale BWM ist davon unabhaengig.
+- `legacyNode` ist fuer uebernommene Melder `103` oder `104` und muss eindeutig sein.
+  Neue Melder haben keine alte Zuordnung. Bisherige `node`-, `device`- und
+  `sensor`-URLs bleiben erhalten und pruefen weiterhin den konfigurierten Eingangskanal.
+  Der alte Aufruf `node=esp` bleibt bei aktiviertem internem BWM moeglich.
+- Polling ist je Melder optional und Shelly-spezifisch (`/rpc/Input.GetStatus?id=<kanal>`).
+  `pollHost` ist Hostname/IPv4 mit optionalem Port, ohne URL-Pfad oder Anmeldung;
+  Eingangskanaele sind 0 bis 255. Ohne Polling darf der Host leer sein.
+  `shellyPollIntervalMs` gilt gemeinsam. Pro loop-Durchlauf wird hoechstens ein
+  Melder abgefragt; neue HTTP-Events waehrend einer Abfrage werden nicht durch deren Antwort ueberschrieben.
+- `motionEventTimeoutMs` gilt weiterhin gemeinsam fuer alle Melder.
+  Jede gueltige Meldung/Polling-Antwort erneuert die Plausibilitaetsfrist.
+  Timeout setzt nur den betroffenen Melder inaktiv und wird angezeigt und geloggt.
+- Der Nachlauf beginnt erst bei null aktiven Meldern; neue Bewegung bricht ihn ab.
+  Zeitfenster und manuelle Uebersteuerung bleiben unveraendert.
+- `/api/config` liefert `motionSensors`, `espMotionEnabled` und `maxMotionSensors`.
+  `/api/status` liefert die externe Liste plus internen Melder mit `enabled`,
+  `active`, `local`, `timedOut`, `lastSource`, optional `lastEventAgeMs` und
+  optional `pollHealthy`. Alter seit letzter Meldung ist relativ zur ESP-Laufzeit,
+  nicht zur Browser-Uhr. Nach Neustart sind externe Zustaende unbekannt/inaktiv, bis
+  ein Event oder Polling kommt. Beim Speichern bleiben Zustaende durchgehend aktivierter,
+  gleich identifizierter externer Melder erhalten; entfernte/deaktivierte Melder zaehlen nicht mehr.
+- Startseite und Einstellungen zeigen alle Melder mit Name, Aktivzustand, letzter Meldung,
+  Timeout und Polling-Fehlern. Alte Statusfelder `motionEsp`, `motion103`, `motion104`
+  bleiben fuer bestehende Clients erhalten.
 
 ## Sourcecode Beschreibung
 Die Firmware ist modular aufgebaut. Der Einstieg liegt in main.cpp, Logik und APIs sind getrennt.
@@ -110,11 +195,11 @@ Die Firmware ist modular aufgebaut. Der Einstieg liegt in main.cpp, Logik und AP
 - Enthalten die komplette Schaltlogik
 - Aufgaben:
   - Auswertung ESP-BWM inklusive Entprellung
-  - Verarbeiten von Shelly-BWM Events (103/104)
+  - Verarbeiten frei konfigurierbarer BWM-Events und kompatibler alter Shelly-URLs
   - Tasterlogik kurz/lang
   - Nachlaufsteuerung
   - Zeitfensterpruefung fuer BWM-Automatik
-  - Schalten aller Shelly-Relais via HTTP
+  - Schalten frei konfigurierbarer Lampen via HTTP-Warteschlange
 - Wichtige Methoden:
   - onMotionEvent(...)
   - handleShortPush()

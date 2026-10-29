@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include <deque>
+#include <mutex>
 #include "app_config.h"
 
 class LightingController {
@@ -11,7 +13,9 @@ public:
   void loop();
   void onConfigUpdated();
 
-  void onMotionEvent(const String &source, bool active);
+  bool onMotionEvent(const String &source, bool active);
+  bool resolveMotionSource(const String &legacyNode, String &id, uint8_t &channel) const;
+  void writeMotionStatus(JsonArray array) const;
   void handleShortPush();
   void handleLongPush();
   void forceOff();
@@ -28,16 +32,33 @@ public:
   bool isMotionWindowActive() const;
   bool getSunTimes(int &sunriseMin, int &sunsetMin) const;
   bool getEffectiveWindow(uint16_t &startMin, uint16_t &endMin) const;
-  bool setSingleLampRelay(uint16_t node, uint8_t relay, bool on);
+  bool setSingleLamp(const String &id, bool on);
   void setAllLampsManual(bool on);
   void setAutomationEnabled(bool enabled);
+  void writeLampStatus(JsonArray array) const;
+  bool lampCommandsBusy() const;
 
 private:
   AppConfig &cfg;
 
-  bool motionEsp = false;
-  bool motion103 = false;
-  bool motion104 = false;
+  struct MotionState {
+    MotionSensorConfig config;
+    bool active = false;
+    bool hasEvent = false;
+    bool timedOut = false;
+    unsigned long lastEventMs = 0;
+    String lastSource;
+    bool pollKnown = false;
+    bool pollHealthy = true;
+    uint32_t sequence = 0;
+  };
+  mutable std::mutex motionMutex;
+  MotionState localMotion;
+  std::vector<MotionState> motionStates;
+  uint32_t motionGeneration = 0;
+  size_t nextMotionPoll = 0;
+  bool motionPollCycle = false;
+  uint8_t configuredLedPin = 255;
   bool relayState = false;
   bool forceOnLatch = false;
 
@@ -49,13 +70,9 @@ private:
   bool espRawState = false;
   bool espStableState = false;
   unsigned long espLastEdgeMs = 0;
-  unsigned long lastEventMsEsp = 0;
-  unsigned long lastEventMs103 = 0;
-  unsigned long lastEventMs104 = 0;
   unsigned long lastShellyPollMs = 0;
   unsigned long lastShelly102CommandMs = 0;
-  bool pollHealthy103 = true;
-  bool pollHealthy104 = true;
+  bool hasShelly102Command = false;
 
   mutable int sunCacheYday = -1;
   mutable int sunCacheSunriseMin = -1;
@@ -67,6 +84,8 @@ private:
 
   bool isBeforeMillis(unsigned long now, unsigned long target) const;
   bool readEspMotion() const;
+  bool getLegacyMotion(const String &node) const;
+  void recordMotion(MotionState &state, bool active, const String &source);
   void updateEspMotionLed();
   void applyMotionPlausibilityTimeouts();
   void pollShellyInputs();
@@ -76,7 +95,31 @@ private:
   void evaluateLighting();
   bool computeDesiredOn() const;
   void setRelayState(bool on, const String &reason);
-  void setConfiguredRelays(bool on) const;
-  void setAllLampRelays(bool on) const;
-  void sendShellyRelayCommand(const String &ip, uint8_t relay, bool on) const;
+  struct LampState {
+    LampConfig config;
+    bool pending = false;
+    bool requestedOn = false;
+    bool commandKnown = false;
+    bool lastCommandOn = false;
+    int httpCode = 0;
+    String error;
+    uint32_t sequence = 0;
+  };
+  struct LampCommand {
+    LampConfig config;
+    bool on;
+    uint32_t generation;
+    uint32_t sequence;
+    bool mandatory;
+  };
+  mutable std::mutex lampMutex;
+  std::vector<LampState> lampStates;
+  std::deque<LampCommand> lampCommands;
+  uint32_t lampGeneration = 0;
+  bool lampCommandInFlight = false;
+  void resetLampCommands();
+  void queueLampCommand(LampState &lamp, bool on, bool mandatory = false);
+  void processLampCommand();
+  void setConfiguredRelays(bool on);
+  void setAllLampRelays(bool on, bool mandatory = false);
 };

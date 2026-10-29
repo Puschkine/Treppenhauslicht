@@ -25,12 +25,13 @@ Der ESP32 muss eine Weboberflaeche zur Laufzeit-Konfiguration bereitstellen.
 Alle Einstellungen muessen persistent in LittleFS als JSON gespeichert werden.
 
 ## 4. Kommunikations-Anforderungen
-### COM-01 Shelly-Kommunikation via RPC
-Die Kommunikation zu Shelly muss ausschliesslich ueber RPC-Endpunkte erfolgen.
+### COM-01 Shelly-Eingaenge via RPC
+Das Polling der Shelly-Eingaenge erfolgt ueber RPC-Endpunkte.
 
 ### COM-02 Schalten von Relais
-Der ESP muss Relais ueber RPC schalten:
-- /rpc/Switch.Set?id={kanal}&on={true|false}
+Der ESP schaltet Lampen ueber frei konfigurierbare HTTP-GET-URLs fuer EIN und AUS.
+Shellys koennen weiterhin `/rpc/Switch.Set?id={kanal}&on={true|false}` verwenden.
+Andere Hersteller mit HTTP-Schaltbefehlen koennen ohne Firmwareaenderung hinzukommen.
 
 ### COM-03 Polling von Input-Status
 Der ESP muss Shelly-Inputstatus ueber RPC pollen:
@@ -41,16 +42,16 @@ Shelly-Ereignisse muessen ueber HTTP-Endpunkte am ESP empfangen werden.
 
 ## 5. Funktions-Anforderungen
 ### FR-01 Bewegungsmelder-Quellen
-Die Steuerung beruecksichtigt drei Bewegungsquellen:
-- Lokal am ESP
-- Shelly 103 (konfigurierbarer BWM-Eingangskanal)
-- Shelly 104 (konfigurierbarer BWM-Eingangskanal)
+Die Steuerung beruecksichtigt einen separat aktivierbaren lokalen ESP-BWM und
+bis zu 32 frei konfigurierbare externe Melder. Shelly 103/104 werden automatisch
+mit ihren bisherigen Kanaelen und Polling-Einstellungen uebernommen.
 
 ### FR-02 Flankenverarbeitung
 BWM-Zustaende werden als EIN/AUS-Flanken verarbeitet.
 
 ### FR-03 Aktiv-Zaehler
-Die State Machine muss intern die Anzahl aktiver BWM-Quellen verwalten.
+Die State Machine zaehlt aktive, aktivierte BWM anhand ihres individuellen Zustands.
+Doppelte EIN-/AUS-Meldungen duerfen den Zaehler nicht verfaelschen.
 
 ### FR-04 Einschaltregel
 Solange mindestens ein BWM aktiv ist, bleibt Licht im Automatikbetrieb an.
@@ -83,8 +84,10 @@ Manuelle Tasteraktionen muessen gegenueber BWM-Automatik Vorrang haben.
 Beim Hochfahren muessen alle Lampenkanaele explizit AUS geschaltet werden.
 
 ### FR-13 Kanalverhalten Laufzeit
-Im Automatikbetrieb (BWM/Short Push ON) duerfen nur konfigurierte Lampenausgaenge je Shelly 103/104 geschaltet werden.
-Nicht konfigurierte Kanaele duerfen nur bei Long Push eingeschaltet werden.
+Im Automatikbetrieb (BWM/Short Push ON) werden nur aktivierte Lampen mit
+`automation=true` geschaltet. Globale/manuelle Aktionen beruecksichtigen alle
+aktivierten Lampen. Die bestehenden Output-Kanaele werden bei der Migration
+als Automatik-Auswahl uebernommen.
 
 ### FR-14 Globales Ausschalten
 Bei Short Push OFF und API Force OFF muessen alle Lampenkanaele ausgeschaltet werden.
@@ -146,16 +149,12 @@ Zeitdaten muessen fuer das BWM-Zeitfenster verwendet werden.
 ### CFG-01 Pflichtparameter
 Konfigurierbare Parameter:
 - shelly102Ip
-- shelly103Ip
-- shelly104Ip
-- shelly103MotionChannel
-- shelly104MotionChannel
-- shelly103OutputChannel
-- shelly104OutputChannel
+- espMotionEnabled
+- motionSensors (id, name, enabled, pollingEnabled, pollHost, pollChannel, legacyNode)
+- lamps (bis zu 32 Eintraege mit id, name, onUrl, offUrl, enabled, automation, buttonGuard)
 - motionOffDelayMs
 - buttonShortOverrideMs
 - motionEventTimeoutMs
-- shellyPollingEnabled
 - shellyPollIntervalMs
 - espMotionPin
 - espMotionLedPin
@@ -176,16 +175,14 @@ Konfigurierbare Parameter:
 ### CFG-02 Defaultwerte
 Defaultwerte:
 - shelly102Ip = 192.168.178.102
-- shelly103Ip = 192.168.178.103
-- shelly104Ip = 192.168.178.104
-- shelly103MotionChannel = 1
-- shelly104MotionChannel = 0
-- shelly103OutputChannel = 0
-- shelly104OutputChannel = 0
+- espMotionEnabled = true
+- motionSensors = bwm-103 (192.168.178.103, Kanal 1) und bwm-104 (192.168.178.104, Kanal 0),
+  aktiviert und mit Shelly-Polling; alte node-URLs bleiben kompatibel.
+- lamps = die fuenf bisherigen Shelly-Ausgaenge; Automatik fuer 102/0, 103/0 und 104/0.
+  Bestehende Konfigurationen behalten bei Migration ihre bisherige Kanalauswahl.
 - motionOffDelayMs = 60000
 - buttonShortOverrideMs = 120000
 - motionEventTimeoutMs = 180000
-- shellyPollingEnabled = true
 - shellyPollIntervalMs = 5000
 - espMotionPin = 12
 - espMotionLedPin = 32
@@ -213,12 +210,17 @@ Defaultwerte:
 - POST /api/config
 
 ### API-Events
+- GET /api/event/motion?id={stabile BWM-ID}&state=0|1
 - GET /api/event/motion?node=103|104|esp&channel=0|1&state=0|1
+- Unbekannte/deaktivierte Quellen und fehlende/ungueltige Zustaende: HTTP 400.
+- Die neue ID-basierte API ist herstellerunabhaengig und braucht keinen channel-Parameter.
 - GET /api/event/button?type=short|long
 
 ### API-Steuerung
-- POST /api/manual/relay mit JSON `{"all":true,"on":true}` schaltet alle fuenf Lampenkanaele ein; mit `"on":false` werden sie ausgeschaltet.
-- POST /api/manual/relay mit JSON `{"node":103,"channel":1,"on":true}` schaltet einen einzelnen Lampenkanal. `node` kann 102, 103 oder 104 sein; `channel` ist 0 oder 1. Shelly 102 unterstuetzt nur Kanal 0. Zum Ausschalten `"on":false` setzen.
+- POST /api/manual/relay mit JSON `{"all":true,"on":true}` fordert EIN fuer alle aktivierten Lampen an; mit `"on":false` AUS.
+- POST /api/manual/relay mit JSON `{"id":"shelly-103-1","on":true}` fordert EIN fuer eine einzelne aktivierte Lampe an. Alte Aufrufe mit `node`/`channel` bleiben fuer migrierte IDs kompatibel.
+- HTTP 202 bestaetigt die Einreihung. HTTP-Fehler und letzte Befehle stehen pro Lampe in `/api/status`; ein physischer Zustand wird nicht behauptet.
+- Die Einstellungen erlauben Hinzufuegen, Entfernen, Automatik-Zuordnung und EIN/AUS-Tests des gespeicherten Standes. Details zu Validierung, Migration und Warteschlange stehen in [Steuerlogik](Treppenhauslicht-Steuerlogik.md#frei-konfigurierbare-lampen).
 - POST /api/force/off
 
 ### API-Debug

@@ -205,6 +205,10 @@
       }
       .relay-name {
         font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .relay-row .actions {
+        flex-shrink: 0;
       }
       .relay-toggle {
         display: inline-flex;
@@ -379,22 +383,24 @@
               <span class="section-kicker">Manuelle Steuerung</span>
               <h2>Lichtbereiche</h2>
             </div>
-            <span class="lamp-count">5 Kanaele</span>
+            <span class="lamp-count" id="lampCount">Lade ...</span>
           </div>
           <div class="actions" style="margin-bottom:12px">
             <button class="primary" type="button" id="allOnBtn">Alle EIN</button>
             <button class="ghost" type="button" id="allOffBtn">Alle AUS</button>
           </div>
-          <div class="relay-list">
-            <div class="relay-row"><span class="relay-name">Treppe</span><button class="relay-toggle" type="button" data-node="102" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
-            <div class="relay-row"><span class="relay-name">Gang hinten 0</span><button class="relay-toggle" type="button" data-node="103" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
-            <div class="relay-row"><span class="relay-name">Gang hinten 1</span><button class="relay-toggle" type="button" data-node="103" data-ch="1" aria-pressed="false"><span>AUS</span></button></div>
-            <div class="relay-row"><span class="relay-name">Gang vorne 0</span><button class="relay-toggle" type="button" data-node="104" data-ch="0" aria-pressed="false"><span>AUS</span></button></div>
-            <div class="relay-row"><span class="relay-name">Gang vorne 1</span><button class="relay-toggle" type="button" data-node="104" data-ch="1" aria-pressed="false"><span>AUS</span></button></div>
-          </div>
+          <p class="hint">HTTP-Befehle, keine Rueckmeldung des tatsaechlichen Lampenzustands.</p>
+          <div class="relay-list" id="lampList"></div>
         </div>
 
         <div class="side-stack">
+          <div class="card">
+            <div class="card-heading">
+              <h2>Bewegungsmelder</h2>
+              <span class="lamp-count" id="motionCount">Lade ...</span>
+            </div>
+            <div class="relay-list" id="motionList"></div>
+          </div>
           <div class="card">
             <div class="card-heading">
               <div>
@@ -426,16 +432,93 @@
       </div>
     </div>
 
+    <script src="/lamps.js"></script>
+    <script src="/motion.js"></script>
     <script>
       const q = (id) => document.getElementById(id);
 
-      function relayName(node, channel) {
-        if (node === 102 && channel === 0) return "Treppe";
-        if (node === 103 && channel === 0) return "Gang Hinten 0";
-        if (node === 103 && channel === 1) return "Gang Hinten 1";
-        if (node === 104 && channel === 0) return "Gang Vorne 0";
-        if (node === 104 && channel === 1) return "Gang Vorne 1";
-        return `Shelly ${node} Kanal ${channel}`;
+      function renderMotion(sensors) {
+        q("motionCount").textContent = `${sensors.filter((sensor) => sensor.enabled && sensor.active).length} aktiv`;
+        const signature = JSON.stringify(sensors.map(({id, name}) => ({id, name})));
+        if (q("motionList").dataset.signature !== signature) {
+          q("motionList").replaceChildren();
+          for (const sensor of sensors) {
+            const row = document.createElement("div");
+            row.className = "relay-row";
+            row.dataset.id = sensor.id;
+            const info = document.createElement("div");
+            info.style.minWidth = "0";
+            const name = document.createElement("span");
+            name.className = "relay-name";
+            name.textContent = sensor.name;
+            const status = document.createElement("p");
+            status.className = "hint motion-status";
+            info.append(name, status);
+            row.append(info);
+            q("motionList").append(row);
+          }
+          q("motionList").dataset.signature = signature;
+        }
+        for (const row of q("motionList").children) {
+          const sensor = sensors.find((entry) => entry.id === row.dataset.id);
+          const status = row.querySelector(".motion-status");
+          status.textContent = motionStatusText(sensor);
+          status.classList.toggle("err", sensor.enabled && (sensor.timedOut || sensor.pollHealthy === false));
+        }
+      }
+
+      function renderLamps(lamps) {
+        q("lampCount").textContent = `${lamps.filter((lamp) => lamp.enabled).length} aktive Lampen`;
+        const signature = JSON.stringify(lamps.map(({ id, name, enabled }) => ({ id, name, enabled })));
+        if (q("lampList").dataset.signature !== signature) {
+          q("lampList").replaceChildren();
+          for (const lamp of lamps) {
+            const row = document.createElement("div");
+            row.className = "relay-row";
+            row.dataset.id = lamp.id;
+            const info = document.createElement("div");
+            info.style.minWidth = "0";
+            const name = document.createElement("span");
+            name.className = "relay-name";
+            name.textContent = lamp.name;
+            const status = document.createElement("p");
+            status.className = "hint lamp-status";
+            info.append(name, status);
+            const actions = document.createElement("div");
+            actions.className = "actions";
+            for (const on of [true, false]) {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = on ? "primary" : "ghost";
+              button.textContent = on ? "EIN" : "AUS";
+              button.disabled = !lamp.enabled;
+              button.setAttribute("aria-label", `${lamp.name}: ${button.textContent} senden`);
+              button.addEventListener("click", async () => {
+                button.disabled = true;
+                try {
+                  await lampRequest("/api/manual/relay", { id: lamp.id, on });
+                  setActionResult(`${lamp.name}: ${on ? "EIN" : "AUS"} angefordert.`);
+                  await loadStatus();
+                } catch (e) {
+                  setActionResult(`Fehler: ${e.message}`, false);
+                } finally {
+                  button.disabled = !lamp.enabled;
+                }
+              });
+              actions.append(button);
+            }
+            row.append(info, actions);
+            q("lampList").append(row);
+          }
+          if (!lamps.length) q("lampList").textContent = "Keine Lampen konfiguriert.";
+          q("lampList").dataset.signature = signature;
+        }
+        for (const row of q("lampList").querySelectorAll(".relay-row")) {
+          const lamp = lamps.find((entry) => entry.id === row.dataset.id);
+          const status = row.querySelector(".lamp-status");
+          status.textContent = lampStatusText(lamp);
+          status.classList.toggle("err", Boolean(lamp.error) && !lamp.pending);
+        }
       }
 
       function setActionResult(text, ok = true) {
@@ -444,31 +527,12 @@
         el.className = `hint action-result ${ok ? "ok" : "err"}`;
       }
 
-      function setRelayToggle(button, on) {
-        button.setAttribute("aria-pressed", String(on));
-        const name = button.closest(".relay-row").querySelector(".relay-name").textContent;
-        button.setAttribute("aria-label", `${name}: ${on ? "EIN" : "AUS"}`);
-        button.querySelector("span").textContent = on ? "EIN" : "AUS";
-      }
-
-      function setRelayToggles(on) {
-        document.querySelectorAll(".relay-toggle").forEach((button) => setRelayToggle(button, on));
-      }
-
       async function postJson(url, payload) {
-        const r = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!r.ok) {
-          throw new Error(`HTTP ${r.status}`);
-        }
+        return lampRequest(url, payload);
       }
 
       async function loadStatus() {
-        const r = await fetch("/api/status");
-        const s = await r.json();
+        const s = await lampRequest("/api/status");
         const staIp = s.ipSta || s.ip || "-";
         const apIp = s.ipAp || "-";
         q("ipSummary").textContent = `STA: ${staIp} | AP: ${apIp}`;
@@ -481,10 +545,8 @@
         autoBtn.classList.toggle("is-on", autoOn);
         autoBtn.setAttribute("aria-pressed", String(autoOn));
 
-        if (!window.relayTogglesInitialized) {
-          setRelayToggles(Boolean(s.relayState));
-          window.relayTogglesInitialized = true;
-        }
+        renderLamps(s.lamps);
+        renderMotion(s.motionSensors);
 
         q("statusBox").textContent = JSON.stringify(s, null, 2);
       }
@@ -502,15 +564,7 @@
 
       async function setAll(on) {
         await postJson("/api/manual/relay", { all: true, on });
-        setRelayToggles(on);
-        setActionResult(on ? "Alle Kanaele eingeschaltet." : "Alle Kanaele ausgeschaltet.");
-        await loadStatus();
-      }
-
-      async function setSingle(node, channel, on, button) {
-        await postJson("/api/manual/relay", { node, channel, on });
-        setRelayToggle(button, on);
-        setActionResult(`${relayName(node, channel)} -> ${on ? "EIN" : "AUS"}`);
+        setActionResult(`Alle aktiven Lampen: ${on ? "EIN" : "AUS"} angefordert.`);
         await loadStatus();
       }
 
@@ -528,20 +582,8 @@
       q("refreshLogBtn").addEventListener("click", () => loadLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
       q("clearLogBtn").addEventListener("click", () => clearLogs().catch((e) => setActionResult(`Fehler: ${e.message}`, false)));
 
-      document.querySelectorAll(".relay-toggle[data-node]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const node = Number(btn.dataset.node);
-          const channel = Number(btn.dataset.ch);
-          const on = btn.getAttribute("aria-pressed") !== "true";
-          btn.disabled = true;
-          setSingle(node, channel, on, btn)
-            .catch((e) => setActionResult(`Fehler: ${e.message}`, false))
-            .finally(() => { btn.disabled = false; });
-        });
-      });
-
       loadStatus().then(loadLogs).catch((e) => setActionResult(`Fehler beim Laden: ${e.message}`, false));
-      setInterval(() => loadStatus().catch(() => {}), 3000);
+      setInterval(() => loadStatus().catch((e) => setActionResult(`Statusfehler: ${e.message}`, false)), 1500);
       setInterval(() => loadLogs().catch(() => {}), 2000);
     </script>
   </body>

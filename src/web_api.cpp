@@ -33,6 +33,8 @@ String buildStateJson(const AppConfig &cfg, const LightingController &controller
   doc["rssi"] = WiFi.RSSI();
   doc["wifi_status"] = getConnectionState();
   doc["relayState"] = controller.getRelayState();
+  controller.writeLampStatus(doc["lamps"].to<JsonArray>());
+  controller.writeMotionStatus(doc["motionSensors"].to<JsonArray>());
   doc["motionEsp"] = controller.getMotionEsp();
   doc["motion103"] = controller.getMotion103();
   doc["motion104"] = controller.getMotion104();
@@ -66,16 +68,14 @@ String buildConfigJson(const AppConfig &cfg)
 {
   JsonDocument doc;
   doc["shelly102Ip"] = cfg.shelly102Ip;
-  doc["shelly103Ip"] = cfg.shelly103Ip;
-  doc["shelly104Ip"] = cfg.shelly104Ip;
-  doc["shelly103MotionChannel"] = cfg.shelly103MotionChannel;
-  doc["shelly104MotionChannel"] = cfg.shelly104MotionChannel;
-  doc["shelly103OutputChannel"] = cfg.shelly103OutputChannel;
-  doc["shelly104OutputChannel"] = cfg.shelly104OutputChannel;
+  writeMotionConfig(doc["motionSensors"].to<JsonArray>(), cfg.motionSensors);
+  doc["espMotionEnabled"] = cfg.espMotionEnabled;
+  doc["maxMotionSensors"] = MAX_MOTION_SENSORS;
+  writeLampConfig(doc["lamps"].to<JsonArray>(), cfg.lamps);
+  doc["maxLamps"] = MAX_LAMPS;
   doc["motionOffDelayMs"] = cfg.motionOffDelayMs;
   doc["buttonShortOverrideMs"] = cfg.buttonShortOverrideMs;
   doc["motionEventTimeoutMs"] = cfg.motionEventTimeoutMs;
-  doc["shellyPollingEnabled"] = cfg.shellyPollingEnabled;
   doc["shellyPollIntervalMs"] = cfg.shellyPollIntervalMs;
   doc["espMotionPin"] = cfg.espMotionPin;
   doc["espMotionLedPin"] = cfg.espMotionLedPin;
@@ -106,23 +106,8 @@ void applyJsonConfig(const JsonDocument &doc, AppConfig &cfg)
   if (doc["shelly102Ip"].is<String>()) {
     cfg.shelly102Ip = doc["shelly102Ip"].as<String>();
   }
-  if (doc["shelly103Ip"].is<String>()) {
-    cfg.shelly103Ip = doc["shelly103Ip"].as<String>();
-  }
-  if (doc["shelly104Ip"].is<String>()) {
-    cfg.shelly104Ip = doc["shelly104Ip"].as<String>();
-  }
-  if (doc["shelly103MotionChannel"].is<int>()) {
-    cfg.shelly103MotionChannel = (uint8_t)constrain(doc["shelly103MotionChannel"].as<int>(), 0, 1);
-  }
-  if (doc["shelly104MotionChannel"].is<int>()) {
-    cfg.shelly104MotionChannel = (uint8_t)constrain(doc["shelly104MotionChannel"].as<int>(), 0, 1);
-  }
-  if (doc["shelly103OutputChannel"].is<int>()) {
-    cfg.shelly103OutputChannel = (uint8_t)constrain(doc["shelly103OutputChannel"].as<int>(), 0, 1);
-  }
-  if (doc["shelly104OutputChannel"].is<int>()) {
-    cfg.shelly104OutputChannel = (uint8_t)constrain(doc["shelly104OutputChannel"].as<int>(), 0, 1);
+  if (doc["espMotionEnabled"].is<bool>()) {
+    cfg.espMotionEnabled = doc["espMotionEnabled"].as<bool>();
   }
   if (doc["motionOffDelayMs"].is<unsigned long>()) {
     cfg.motionOffDelayMs = (uint32_t)constrain((long)doc["motionOffDelayMs"].as<unsigned long>(), 100, 600000);
@@ -132,9 +117,6 @@ void applyJsonConfig(const JsonDocument &doc, AppConfig &cfg)
   }
   if (doc["motionEventTimeoutMs"].is<unsigned long>()) {
     cfg.motionEventTimeoutMs = (uint32_t)constrain((long)doc["motionEventTimeoutMs"].as<unsigned long>(), 1000, 3600000);
-  }
-  if (doc["shellyPollingEnabled"].is<bool>()) {
-    cfg.shellyPollingEnabled = doc["shellyPollingEnabled"].as<bool>();
   }
   if (doc["shellyPollIntervalMs"].is<unsigned long>()) {
     cfg.shellyPollIntervalMs = (uint32_t)constrain((long)doc["shellyPollIntervalMs"].as<unsigned long>(), 1000, 60000);
@@ -221,6 +203,10 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
       [](AsyncWebServerRequest *request) {},
       nullptr,
       [&](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+        if (total > 64 * 1024) {
+          if (index == 0) request->send(413, "application/json", "{\"ok\":false,\"error\":\"Konfiguration ist groesser als 64 KiB\"}");
+          return;
+        }
         if (index == 0) {
           request->_tempObject = new String();
         }
@@ -242,14 +228,68 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
           return;
         }
 
-        applyJsonConfig(doc, cfg);
-        saveConfig(cfg);
+        AppConfig updated = cfg;
+        applyJsonConfig(doc, updated);
+        String motionError;
+        if (!doc["espMotionEnabled"].isUnbound() && !doc["espMotionEnabled"].is<bool>()) {
+          motionError = "espMotionEnabled muss true oder false sein";
+        } else if (!doc["motionSensors"].isUnbound()) {
+          readMotionConfig(doc["motionSensors"], updated.motionSensors, motionError);
+        }
+        if (!motionError.isEmpty()) {
+          appLogf(APP_LOG_LEVEL, "Konfiguration abgelehnt: %s", motionError.c_str());
+          JsonDocument response;
+          response["ok"] = false;
+          response["error"] = motionError;
+          String payload;
+          serializeJson(response, payload);
+          request->send(400, "application/json", payload);
+          return;
+        }
+        if (!doc["lamps"].isUnbound()) {
+          String error;
+          if (!readLampConfig(doc["lamps"], updated.lamps, error)) {
+            appLogf(APP_LOG_LEVEL, "Konfiguration abgelehnt: %s", error.c_str());
+            JsonDocument response;
+            response["ok"] = false;
+            response["error"] = error;
+            String payload;
+            serializeJson(response, payload);
+            request->send(400, "application/json", payload);
+            return;
+          }
+        }
+        if (controller.lampCommandsBusy()) {
+          request->send(409, "application/json", "{\"ok\":false,\"error\":\"Lampenbefehle laufen noch. Bitte erneut speichern.\"}");
+          return;
+        }
+        if (!saveConfig(updated)) {
+          request->send(500, "application/json", "{\"ok\":false,\"error\":\"Konfiguration konnte nicht gespeichert werden\"}");
+          return;
+        }
+        cfg = std::move(updated);
         applyTimeConfig(cfg);
         controller.onConfigUpdated();
         request->send(200, "application/json", "{\"ok\":true}");
       });
 
   server.on("/api/event/motion", HTTP_GET, [&](AsyncWebServerRequest *request) {
+    const String stateRaw = request->hasParam("state") ? request->getParam("state")->value() : "";
+    if (stateRaw != "0" && stateRaw != "1" && stateRaw != "true" && stateRaw != "false" &&
+        stateRaw != "on" && stateRaw != "off") {
+      appLogf(APP_LOG_LEVEL, "BWM Event verworfen: ungueltiger Zustand '%s'", stateRaw.c_str());
+      request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_state\"}");
+      return;
+    }
+    if (request->hasParam("id")) {
+      const String id = request->getParam("id")->value();
+      if (!controller.onMotionEvent(id, parseBool(stateRaw))) {
+        request->send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_or_disabled_sensor\"}");
+        return;
+      }
+      request->send(200, "application/json", "{\"ok\":true}");
+      return;
+    }
     String node = request->hasParam("node") ? request->getParam("node")->value() : "";
     if (node.length() == 0 && request->hasParam("device")) {
       node = request->getParam("device")->value();
@@ -258,25 +298,23 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
       node = request->getParam("sensor")->value();
     }
 
-    String stateRaw = request->hasParam("state") ? request->getParam("state")->value() : "0";
-    bool state = parseBool(stateRaw);
-    int channel = request->hasParam("channel") ? request->getParam("channel")->value().toInt() : 0;
-
-    if (node == "103" && channel != cfg.shelly103MotionChannel) {
-      request->send(200, "application/json", "{\"ok\":true,\"ignored\":\"channel_mismatch_103\"}");
-      return;
-    }
-    if (node == "104" && channel != cfg.shelly104MotionChannel) {
-      request->send(200, "application/json", "{\"ok\":true,\"ignored\":\"channel_mismatch_104\"}");
-      return;
-    }
-
-    if (node != "esp" && node != "103" && node != "104") {
+    String id;
+    uint8_t expectedChannel = 0;
+    if (!controller.resolveMotionSource(node, id, expectedChannel)) {
+      appLogf(APP_LOG_LEVEL, "BWM Event verworfen: unbekannte bisherige Quelle '%s'", node.c_str());
       request->send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_node\"}");
       return;
     }
-
-    controller.onMotionEvent(node, state);
+    const String channelRaw = request->hasParam("channel") ? request->getParam("channel")->value() : "0";
+    if (node != "esp" && channelRaw != String(expectedChannel)) {
+      appLogf(APP_LOG_LEVEL, "BWM Event ignoriert: Kanal passt nicht fuer %s", node.c_str());
+      request->send(200, "application/json", "{\"ok\":true,\"ignored\":\"channel_mismatch\"}");
+      return;
+    }
+    if (!controller.onMotionEvent(id, parseBool(stateRaw))) {
+      request->send(400, "application/json", "{\"ok\":false,\"error\":\"unknown_or_disabled_sensor\"}");
+      return;
+    }
     request->send(200, "application/json", "{\"ok\":true}");
   });
 
@@ -357,8 +395,13 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
           return;
         }
 
-        controller.setAutomationEnabled(doc["enabled"].as<bool>());
-        saveConfig(cfg);
+        AppConfig updated = cfg;
+        updated.automationEnabled = doc["enabled"].as<bool>();
+        if (!saveConfig(updated)) {
+          request->send(500, "application/json", "{\"ok\":false,\"error\":\"Konfiguration konnte nicht gespeichert werden\"}");
+          return;
+        }
+        controller.setAutomationEnabled(updated.automationEnabled);
         request->send(200, "application/json", "{\"ok\":true}");
       });
 
@@ -392,32 +435,21 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
         const bool all = doc["all"].is<bool>() && doc["all"].as<bool>();
         if (all) {
           controller.setAllLampsManual(on);
-          request->send(200, "application/json", "{\"ok\":true,\"scope\":\"all\"}");
+          request->send(202, "application/json", "{\"ok\":true,\"queued\":true,\"scope\":\"all\"}");
           return;
         }
 
-        if (!doc["node"].is<int>() || !doc["channel"].is<int>()) {
-          request->send(400, "application/json", "{\"ok\":false,\"error\":\"missing_node_or_channel\"}");
-          return;
+        String id = doc["id"].is<String>() ? doc["id"].as<String>() : "";
+        // Existing callers continue to address the migrated default lamps.
+        if (id.isEmpty() && doc["node"].is<int>() && doc["channel"].is<int>()) {
+          id = "shelly-" + String(doc["node"].as<int>()) + "-" + String(doc["channel"].as<int>());
         }
-
-        const int nodeValue = doc["node"].as<int>();
-        const int channelValue = doc["channel"].as<int>();
-        if ((nodeValue != 102 && nodeValue != 103 && nodeValue != 104) ||
-            channelValue < 0 || channelValue > 1 ||
-            (nodeValue == 102 && channelValue != 0)) {
+        if (!controller.setSingleLamp(id, on)) {
           request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_target\"}");
           return;
         }
 
-        const uint16_t node = (uint16_t)nodeValue;
-        const uint8_t channel = (uint8_t)channelValue;
-        if (!controller.setSingleLampRelay(node, channel, on)) {
-          request->send(400, "application/json", "{\"ok\":false,\"error\":\"invalid_target\"}");
-          return;
-        }
-
-        request->send(200, "application/json", "{\"ok\":true,\"scope\":\"single\"}");
+        request->send(202, "application/json", "{\"ok\":true,\"queued\":true,\"scope\":\"single\"}");
       });
 
   server.onNotFound([](AsyncWebServerRequest *request) {

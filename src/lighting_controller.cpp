@@ -58,8 +58,9 @@ LightingController::LightingController(AppConfig &config) : cfg(config)
 
 void LightingController::begin()
 {
+  resetLampCommands();
   // Ensure a defined safe startup state: all lights off at boot.
-  setAllLampRelays(false);
+  setAllLampRelays(false, true);
   relayState = false;
   forceOnLatch = false;
   shortOverrideUntil = 0;
@@ -67,19 +68,45 @@ void LightingController::begin()
   offDeadline = 0;
   autoRearmBlockedUntil = 0;
 
-  pinMode(cfg.espMotionPin, INPUT);
-  pinMode(cfg.espMotionLedPin, OUTPUT);
-  espRawState = readEspMotion();
-  espStableState = espRawState;
-  motionEsp = espStableState;
-  espLastEdgeMs = millis();
-  lastEventMsEsp = espLastEdgeMs;
-  lastEventMs103 = espLastEdgeMs;
-  lastEventMs104 = espLastEdgeMs;
-  lastShellyPollMs = espLastEdgeMs;
-  pollHealthy103 = true;
-  pollHealthy104 = true;
-  updateEspMotionLed();
+  {
+    std::lock_guard<std::mutex> lock(motionMutex);
+    ++motionGeneration;
+    std::vector<MotionState> updatedStates;
+    for (const MotionSensorConfig &config : cfg.motionSensors) {
+      MotionState state;
+      for (const MotionState &existing : motionStates) {
+        if (existing.config.id == config.id && existing.config.enabled && config.enabled) {
+          state = existing;
+          if (existing.config.pollHost != config.pollHost ||
+              existing.config.pollChannel != config.pollChannel ||
+              existing.config.pollingEnabled != config.pollingEnabled) {
+            state.pollKnown = false;
+            state.pollHealthy = true;
+          }
+          break;
+        }
+      }
+      state.config = config;
+      updatedStates.push_back(state);
+    }
+    motionStates = std::move(updatedStates);
+    if (configuredLedPin != 255) digitalWrite(configuredLedPin, LOW);
+    configuredLedPin = cfg.espMotionLedPin;
+    pinMode(configuredLedPin, OUTPUT);
+    localMotion = MotionState();
+    localMotion.config.id = "esp";
+    localMotion.config.name = "Interner BWM";
+    localMotion.config.enabled = cfg.espMotionEnabled;
+    if (cfg.espMotionEnabled) pinMode(cfg.espMotionPin, INPUT);
+    espRawState = cfg.espMotionEnabled && readEspMotion();
+    espStableState = espRawState;
+    if (cfg.espMotionEnabled) recordMotion(localMotion, espStableState, "gpio");
+    espLastEdgeMs = millis();
+    lastShellyPollMs = espLastEdgeMs;
+    motionPollCycle = false;
+    nextMotionPoll = 0;
+    updateEspMotionLed();
+  }
 
   appLogf(APP_LOG_LEVEL, "Startup Action: Alle Lampen AUS");
 }
@@ -88,20 +115,26 @@ void LightingController::loop()
 {
   const unsigned long now = millis();
 
-  bool nowRaw = readEspMotion();
-  if (nowRaw != espRawState) {
-    espRawState = nowRaw;
-    espLastEdgeMs = now;
-  }
-
-  if (espStableState != espRawState && !isBeforeMillis(now, espLastEdgeMs + ESP_DEBOUNCE_MS)) {
-    espStableState = espRawState;
-    onMotionEvent("esp", espStableState);
+  {
+    std::lock_guard<std::mutex> lock(motionMutex);
+    if (localMotion.config.enabled) {
+      const bool nowRaw = readEspMotion();
+      if (nowRaw != espRawState) {
+        espRawState = nowRaw;
+        espLastEdgeMs = now;
+      }
+      if (espStableState != espRawState && !isBeforeMillis(now, espLastEdgeMs + ESP_DEBOUNCE_MS)) {
+        espStableState = espRawState;
+        recordMotion(localMotion, espStableState, "gpio");
+        updateEspMotionLed();
+      }
+    }
   }
 
   pollShellyInputs();
   applyMotionPlausibilityTimeouts();
   evaluateLighting();
+  processLampCommand();
 }
 
 void LightingController::onConfigUpdated()
@@ -112,34 +145,64 @@ void LightingController::onConfigUpdated()
   evaluateLighting();
 }
 
-void LightingController::onMotionEvent(const String &source, bool active)
+void LightingController::recordMotion(MotionState &state, bool active, const String &source)
 {
-  const char *sourceLabel = "unbekannt";
-  if (source == "esp") {
-    sourceLabel = "lokal";
-  } else if (source == "103") {
-    sourceLabel = "103";
-  } else if (source == "104") {
-    sourceLabel = "104";
+  const bool changed = state.active != active;
+  state.active = active;
+  state.hasEvent = true;
+  state.timedOut = false;
+  state.lastEventMs = millis();
+  state.lastSource = source;
+  ++state.sequence;
+  if (changed || source != "poll") {
+    appLogf(APP_LOG_LEVEL, "BWM %s (%s): %s via %s", state.config.name.c_str(),
+            state.config.id.c_str(), active ? "EIN" : "AUS", source.c_str());
   }
+}
 
-  if (source == "esp") {
-    const unsigned long now = millis();
-    lastEventMsEsp = now;
-    motionEsp = active;
-    updateEspMotionLed();
-  } else if (source == "103") {
-    motion103 = active;
-    lastEventMs103 = millis();
-  } else if (source == "104") {
-    motion104 = active;
-    lastEventMs104 = millis();
+bool LightingController::onMotionEvent(const String &source, bool active)
+{
+  bool accepted = false;
+  {
+    std::lock_guard<std::mutex> lock(motionMutex);
+    if (source == "esp" && localMotion.config.enabled) {
+      recordMotion(localMotion, active, "http");
+      updateEspMotionLed();
+      accepted = true;
+    } else {
+      for (MotionState &state : motionStates) {
+        if (state.config.id == source && state.config.enabled) {
+          recordMotion(state, active, "http");
+          accepted = true;
+          break;
+        }
+      }
+    }
   }
-
-  String msg = "BWM Action von " + String(sourceLabel) + ": " + String(active ? "EIN" : "AUS");
-  appLogf(APP_LOG_LEVEL, "%s", msg.c_str());
-
+  if (!accepted) {
+    appLogf(APP_LOG_LEVEL, "BWM Event verworfen: unbekannt oder deaktiviert: %s", source.c_str());
+    return false;
+  }
   evaluateLighting();
+  return true;
+}
+
+bool LightingController::resolveMotionSource(const String &node, String &id, uint8_t &channel) const
+{
+  std::lock_guard<std::mutex> lock(motionMutex);
+  if (node == "esp") {
+    id = "esp";
+    channel = 0;
+    return true;
+  }
+  for (const MotionState &state : motionStates) {
+    if (state.config.legacyNode == node && !node.isEmpty()) {
+      id = state.config.id;
+      channel = state.config.pollChannel;
+      return true;
+    }
+  }
+  return false;
 }
 
 void LightingController::handleShortPush()
@@ -202,17 +265,27 @@ bool LightingController::getRelayState() const
 
 bool LightingController::getMotionEsp() const
 {
-  return motionEsp;
+  std::lock_guard<std::mutex> lock(motionMutex);
+  return localMotion.config.enabled && localMotion.active;
 }
 
 bool LightingController::getMotion103() const
 {
-  return motion103;
+  return getLegacyMotion("103");
 }
 
 bool LightingController::getMotion104() const
 {
-  return motion104;
+  return getLegacyMotion("104");
+}
+
+bool LightingController::getLegacyMotion(const String &node) const
+{
+  std::lock_guard<std::mutex> lock(motionMutex);
+  for (const MotionState &state : motionStates) {
+    if (state.config.legacyNode == node) return state.config.enabled && state.active;
+  }
+  return false;
 }
 
 bool LightingController::getForceOnLatch() const
@@ -227,7 +300,8 @@ bool LightingController::getAutomationEnabled() const
 
 bool LightingController::isShelly102CommandRecent(unsigned long guardMs) const
 {
-  return isBeforeMillis(millis(), lastShelly102CommandMs + guardMs);
+  std::lock_guard<std::mutex> lock(lampMutex);
+  return hasShelly102Command && isBeforeMillis(millis(), lastShelly102CommandMs + guardMs);
 }
 
 bool LightingController::shortOverrideActive() const
@@ -237,17 +311,33 @@ bool LightingController::shortOverrideActive() const
 
 uint8_t LightingController::activeMotionCount() const
 {
-  uint8_t count = 0;
-  if (motionEsp) {
-    count++;
-  }
-  if (motion103) {
-    count++;
-  }
-  if (motion104) {
-    count++;
+  std::lock_guard<std::mutex> lock(motionMutex);
+  uint8_t count = localMotion.config.enabled && localMotion.active ? 1 : 0;
+  for (const MotionState &state : motionStates) {
+    if (state.config.enabled && state.active) ++count;
   }
   return count;
+}
+
+void LightingController::writeMotionStatus(JsonArray array) const
+{
+  std::lock_guard<std::mutex> lock(motionMutex);
+  const unsigned long now = millis();
+  const auto append = [&](const MotionState &state, bool local) {
+    JsonObject item = array.add<JsonObject>();
+    item["id"] = state.config.id;
+    item["name"] = state.config.name;
+    item["enabled"] = state.config.enabled;
+    item["local"] = local;
+    item["active"] = state.config.enabled && state.active;
+    item["timedOut"] = state.timedOut;
+    item["lastSource"] = state.lastSource;
+    if (state.hasEvent) item["lastEventAgeMs"] = (uint32_t)(now - state.lastEventMs);
+    item["pollingEnabled"] = state.config.pollingEnabled;
+    if (state.pollKnown) item["pollHealthy"] = state.pollHealthy;
+  };
+  append(localMotion, true);
+  for (const MotionState &state : motionStates) append(state, false);
 }
 
 bool LightingController::isMotionWindowActive() const
@@ -392,7 +482,7 @@ bool LightingController::readEspMotion() const
 
 void LightingController::updateEspMotionLed()
 {
-  digitalWrite(cfg.espMotionLedPin, motionEsp ? HIGH : LOW);
+  digitalWrite(configuredLedPin, localMotion.config.enabled && localMotion.active ? HIGH : LOW);
 }
 
 void LightingController::applyMotionPlausibilityTimeouts()
@@ -403,21 +493,19 @@ void LightingController::applyMotionPlausibilityTimeouts()
 
   const unsigned long now = millis();
 
-  if (motionEsp && (unsigned long)(now - lastEventMsEsp) > cfg.motionEventTimeoutMs) {
-    motionEsp = false;
-    updateEspMotionLed();
-    appLogf(APP_LOG_LEVEL, "Plausibilitaet: lokal BWM auf AUS (Timeout %lu ms)", (unsigned long)cfg.motionEventTimeoutMs);
-  }
-
-  if (motion103 && (unsigned long)(now - lastEventMs103) > cfg.motionEventTimeoutMs) {
-    motion103 = false;
-    appLogf(APP_LOG_LEVEL, "Plausibilitaet: BWM 103 auf AUS (Timeout %lu ms)", (unsigned long)cfg.motionEventTimeoutMs);
-  }
-
-  if (motion104 && (unsigned long)(now - lastEventMs104) > cfg.motionEventTimeoutMs) {
-    motion104 = false;
-    appLogf(APP_LOG_LEVEL, "Plausibilitaet: BWM 104 auf AUS (Timeout %lu ms)", (unsigned long)cfg.motionEventTimeoutMs);
-  }
+  std::lock_guard<std::mutex> lock(motionMutex);
+  const auto expire = [&](MotionState &state) {
+    if (state.config.enabled && state.active && (unsigned long)(now - state.lastEventMs) > cfg.motionEventTimeoutMs) {
+      state.active = false;
+      state.timedOut = true;
+      ++state.sequence;
+      appLogf(APP_LOG_LEVEL, "Plausibilitaet: BWM %s auf AUS (Timeout %lu ms)",
+              state.config.name.c_str(), (unsigned long)cfg.motionEventTimeoutMs);
+    }
+  };
+  expire(localMotion);
+  for (MotionState &state : motionStates) expire(state);
+  updateEspMotionLed();
 }
 
 void LightingController::evaluateLighting()
@@ -503,91 +591,181 @@ void LightingController::setRelayState(bool on, const String &reason)
   appLogf(APP_LOG_LEVEL, "%s", msg.c_str());
 }
 
-void LightingController::setConfiguredRelays(bool on) const
+void LightingController::setConfiguredRelays(bool on)
 {
-  sendShellyRelayCommand(cfg.shelly102Ip, 0, on);
-  sendShellyRelayCommand(cfg.shelly103Ip, cfg.shelly103OutputChannel, on);
-  sendShellyRelayCommand(cfg.shelly104Ip, cfg.shelly104OutputChannel, on);
+  std::lock_guard<std::mutex> lock(lampMutex);
+  for (LampState &lamp : lampStates) {
+    if (lamp.config.enabled && lamp.config.automation) queueLampCommand(lamp, on);
+  }
 }
 
-void LightingController::setAllLampRelays(bool on) const
+void LightingController::setAllLampRelays(bool on, bool mandatory)
 {
-  sendShellyRelayCommand(cfg.shelly102Ip, 0, on);
-  sendShellyRelayCommand(cfg.shelly103Ip, 0, on);
-  sendShellyRelayCommand(cfg.shelly103Ip, 1, on);
-  sendShellyRelayCommand(cfg.shelly104Ip, 0, on);
-  sendShellyRelayCommand(cfg.shelly104Ip, 1, on);
+  std::lock_guard<std::mutex> lock(lampMutex);
+  for (LampState &lamp : lampStates) {
+    if (lamp.config.enabled) queueLampCommand(lamp, on, mandatory);
+  }
 }
 
-void LightingController::sendShellyRelayCommand(const String &ip, uint8_t relay, bool on) const
+void LightingController::resetLampCommands()
 {
-  if (ip.length() == 0) {
-    return;
+  std::lock_guard<std::mutex> lock(lampMutex);
+  // Keep the old OFF target when a lamp is removed, disabled or reassigned.
+  std::deque<LampCommand> cleanup;
+  for (const LampCommand &command : lampCommands) {
+    if (command.config.id.isEmpty()) cleanup.push_back(command);
   }
-
-  if (ip == cfg.shelly102Ip) {
-    const_cast<LightingController *>(this)->lastShelly102CommandMs = millis();
+  for (const LampState &old : lampStates) {
+    if (!old.config.enabled) continue;
+    bool retained = false;
+    for (const LampConfig &lamp : cfg.lamps) {
+      if (lamp.enabled && lamp.id == old.config.id &&
+          lamp.onUrl == old.config.onUrl && lamp.offUrl == old.config.offUrl) retained = true;
+    }
+    if (!retained) {
+      LampConfig target = old.config;
+      target.id = "";
+      cleanup.push_back({target, false, 0, 0, true});
+    }
   }
+  lampCommands = std::move(cleanup);
+  ++lampGeneration;
+  lampStates.clear();
+  for (const LampConfig &config : cfg.lamps) {
+    LampState state;
+    state.config = config;
+    lampStates.push_back(state);
+  }
+}
 
-  String url = "http://" + ip + "/rpc/Switch.Set?id=" + String(relay) + "&on=" + (on ? "true" : "false");
+void LightingController::queueLampCommand(LampState &lamp, bool on, bool mandatory)
+{
+  lamp.pending = true;
+  lamp.requestedOn = on;
+  ++lamp.sequence;
+  for (LampCommand &command : lampCommands) {
+    if (!command.mandatory && command.config.id == lamp.config.id && command.generation == lampGeneration) {
+      command.on = on;
+      command.sequence = lamp.sequence;
+      return;
+    }
+  }
+  LampCommand command{lamp.config, on, lampGeneration, lamp.sequence, mandatory};
+  lampCommands.push_back(command);
+}
+
+void LightingController::processLampCommand()
+{
+  LampCommand command;
+  {
+    std::lock_guard<std::mutex> lock(lampMutex);
+    if (lampCommands.empty()) return;
+    command = lampCommands.front();
+    lampCommands.pop_front();
+    lampCommandInFlight = true;
+    if (command.config.buttonGuard) {
+      hasShelly102Command = true;
+      lastShelly102CommandMs = millis();
+    }
+  }
+  const String &url = command.on ? command.config.onUrl : command.config.offUrl;
   HTTPClient http;
+  http.setConnectTimeout(700);
   http.setTimeout(700);
-  http.begin(url);
-  int code = http.GET();
-  if (code < 200 || code >= 300) {
-    String msg = "Shelly RPC Fehler bei " + url + " (HTTP " + String(code) + ")";
-    appLogf(APP_LOG_LEVEL, "%s", msg.c_str());
+  http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+  const int code = http.begin(url) ? http.GET() : HTTPC_ERROR_CONNECTION_REFUSED;
+  const bool ok = code >= 200 && code < 300;
+  String error;
+  if (!ok) {
+    error = code > 0 ? "HTTP " + String(code) : HTTPClient::errorToString(code);
   }
   http.end();
+  {
+    std::lock_guard<std::mutex> lock(lampMutex);
+    lampCommandInFlight = false;
+    if (command.config.buttonGuard) lastShelly102CommandMs = millis();
+    if (command.generation == lampGeneration) {
+      for (LampState &lamp : lampStates) {
+        if (lamp.config.id != command.config.id) continue;
+        lamp.commandKnown = true;
+        lamp.lastCommandOn = command.on;
+        lamp.httpCode = code;
+        lamp.error = error;
+        if (lamp.sequence == command.sequence) lamp.pending = false;
+      }
+    }
+  }
+  appLogf(APP_LOG_LEVEL, "Lampe %s: %s %s (HTTP %d)",
+          command.config.name.c_str(), command.on ? "EIN" : "AUS",
+          ok ? "gesendet" : error.c_str(), code);
+}
+
+bool LightingController::lampCommandsBusy() const
+{
+  std::lock_guard<std::mutex> lock(lampMutex);
+  return lampCommandInFlight || !lampCommands.empty();
+}
+
+void LightingController::writeLampStatus(JsonArray array) const
+{
+  std::lock_guard<std::mutex> lock(lampMutex);
+  for (const LampState &lamp : lampStates) {
+    JsonObject item = array.add<JsonObject>();
+    item["id"] = lamp.config.id;
+    item["name"] = lamp.config.name;
+    item["enabled"] = lamp.config.enabled;
+    item["automation"] = lamp.config.automation;
+    item["pending"] = lamp.pending;
+    item["requestedOn"] = lamp.requestedOn;
+    if (lamp.commandKnown) item["lastCommandOn"] = lamp.lastCommandOn;
+    item["httpCode"] = lamp.httpCode;
+    item["error"] = lamp.error;
+  }
 }
 
 void LightingController::pollShellyInputs()
 {
-  if (!cfg.shellyPollingEnabled || cfg.shellyPollIntervalMs == 0) {
-    return;
+  MotionSensorConfig target;
+  uint32_t generation = 0;
+  uint32_t sequence = 0;
+  bool found = false;
+  {
+    std::lock_guard<std::mutex> lock(motionMutex);
+    const unsigned long now = millis();
+    if (!motionPollCycle) {
+      if (cfg.shellyPollIntervalMs == 0 || isBeforeMillis(now, lastShellyPollMs + cfg.shellyPollIntervalMs)) return;
+      lastShellyPollMs = now;
+      nextMotionPoll = 0;
+      motionPollCycle = true;
+    }
+    while (nextMotionPoll < motionStates.size()) {
+      const MotionState &state = motionStates[nextMotionPoll++];
+      if (!state.config.enabled || !state.config.pollingEnabled) continue;
+      target = state.config;
+      generation = motionGeneration;
+      sequence = state.sequence;
+      found = true;
+      break;
+    }
+    if (nextMotionPoll >= motionStates.size()) motionPollCycle = false;
   }
-
-  const unsigned long now = millis();
-  if (isBeforeMillis(now, lastShellyPollMs + cfg.shellyPollIntervalMs)) {
-    return;
-  }
-  lastShellyPollMs = now;
-
-  bool polledState = false;
-  bool ok103 = queryShellyInputState(cfg.shelly103Ip, cfg.shelly103MotionChannel, polledState);
-  if (ok103) {
-    if (!pollHealthy103) {
-      appLogf(APP_LOG_LEVEL, "Polling 103 wieder ok");
+  if (!found) return;
+  bool active = false;
+  const bool ok = queryShellyInputState(target.pollHost, target.pollChannel, active);
+  {
+    std::lock_guard<std::mutex> lock(motionMutex);
+    if (generation != motionGeneration) return;
+    for (MotionState &state : motionStates) {
+      if (state.config.id != target.id) continue;
+      if (!state.pollKnown || state.pollHealthy != ok) {
+        appLogf(APP_LOG_LEVEL, "Polling BWM %s: %s", target.name.c_str(), ok ? "OK" : "fehlgeschlagen");
+      }
+      state.pollKnown = true;
+      state.pollHealthy = ok;
+      // A newer HTTP event must not be overwritten by an older poll response.
+      if (ok && state.sequence == sequence) recordMotion(state, active, "poll");
+      break;
     }
-    pollHealthy103 = true;
-
-    if (polledState != motion103) {
-      appLogf(APP_LOG_LEVEL, "Polling 103 korrigiert Zustand auf %s", polledState ? "EIN" : "AUS");
-      onMotionEvent("103", polledState);
-    } else if (polledState) {
-      lastEventMs103 = now;
-    }
-  } else if (pollHealthy103) {
-    pollHealthy103 = false;
-    appLogf(APP_LOG_LEVEL, "Polling 103 fehlgeschlagen");
-  }
-
-  bool ok104 = queryShellyInputState(cfg.shelly104Ip, cfg.shelly104MotionChannel, polledState);
-  if (ok104) {
-    if (!pollHealthy104) {
-      appLogf(APP_LOG_LEVEL, "Polling 104 wieder ok");
-    }
-    pollHealthy104 = true;
-
-    if (polledState != motion104) {
-      appLogf(APP_LOG_LEVEL, "Polling 104 korrigiert Zustand auf %s", polledState ? "EIN" : "AUS");
-      onMotionEvent("104", polledState);
-    } else if (polledState) {
-      lastEventMs104 = now;
-    }
-  } else if (pollHealthy104) {
-    pollHealthy104 = false;
-    appLogf(APP_LOG_LEVEL, "Polling 104 fehlgeschlagen");
   }
 }
 
@@ -599,6 +777,7 @@ bool LightingController::queryShellyInputState(const String &ip, uint8_t channel
 
   String url = "http://" + ip + "/rpc/Input.GetStatus?id=" + String(channel);
   HTTPClient http;
+  http.setConnectTimeout(700);
   http.setTimeout(1500);
   http.begin(url);
   int code = http.GET();
@@ -631,33 +810,18 @@ bool LightingController::queryShellyInputState(const String &ip, uint8_t channel
   return false;
 }
 
-bool LightingController::setSingleLampRelay(uint16_t node, uint8_t relay, bool on)
+bool LightingController::setSingleLamp(const String &id, bool on)
 {
-  if (relay > 1) {
-    return false;
-  }
-
-  String ip;
-  if (node == 102) {
-    if (relay != 0) {
-      return false;
+  std::lock_guard<std::mutex> lock(lampMutex);
+  for (LampState &lamp : lampStates) {
+    if (lamp.config.id == id && lamp.config.enabled) {
+      queueLampCommand(lamp, on);
+      appLogf(APP_LOG_LEVEL, "Manuell: Lampe %s -> %s angefordert", lamp.config.name.c_str(), on ? "EIN" : "AUS");
+      return true;
     }
-    ip = cfg.shelly102Ip;
-  } else if (node == 103) {
-    ip = cfg.shelly103Ip;
-  } else if (node == 104) {
-    ip = cfg.shelly104Ip;
-  } else {
-    return false;
   }
-
-  if (ip.length() == 0) {
-    return false;
-  }
-
-  sendShellyRelayCommand(ip, relay, on);
-  appLogf(APP_LOG_LEVEL, "Manuell: Shelly %u Kanal %u -> %s", node, relay, on ? "EIN" : "AUS");
-  return true;
+  appLogf(APP_LOG_LEVEL, "Lampe unbekannt oder deaktiviert: %s", id.c_str());
+  return false;
 }
 
 void LightingController::setAllLampsManual(bool on)

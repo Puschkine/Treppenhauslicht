@@ -120,6 +120,15 @@
         color: var(--muted);
         font-size: 0.86rem;
       }
+      .lamp-editor, .motion-editor {
+        border-top: 1px solid #eadfce;
+        margin-top: 16px;
+        padding-top: 16px;
+      }
+      .lamp-editor input[type="checkbox"], .motion-editor input[type="checkbox"] {
+        width: auto;
+        margin-right: 8px;
+      }
       .ok {
         color: #0f7a35;
       }
@@ -237,37 +246,43 @@
 
       <div class="grid">
         <div class="card">
-          <h2>Shelly Netzwerk</h2>
-          <label for="s102">Shelly 102 IP</label>
+          <h2>Taster</h2>
+          <p class="hint">Erlaubte Quelle fuer Tasterereignisse. Lampen-URLs werden separat konfiguriert.</p>
+          <label for="s102">Treppen-Shelly IP</label>
           <input id="s102" placeholder="z.B. 192.168.1.102">
+        </div>
 
-          <label for="s103">Shelly 103 IP</label>
-          <input id="s103" placeholder="z.B. 192.168.1.103">
+        <div class="card">
+          <h2>Interner Bewegungsmelder</h2>
+          <label for="espEnabled">Internen BWM verwenden</label>
+          <select id="espEnabled"><option value="true">ja</option><option value="false">nein</option></select>
+          <p class="hint">Deaktiviert: Eingang wird ignoriert, zaehlt nicht als aktiv, LED bleibt aus.</p>
+          <label for="espPin">ESP BWM Pin</label>
+          <input id="espPin" type="number" min="0" max="39">
+          <label for="espLedPin">ESP BWM LED Pin</label>
+          <input id="espLedPin" type="number" min="0" max="39">
+          <label for="espInvert">ESP BWM invertiert</label>
+          <select id="espInvert"><option value="false">nein</option><option value="true">ja</option></select>
+          <p class="hint" id="localMotionStatus"></p>
+        </div>
 
-          <label for="s104">Shelly 104 IP</label>
-          <input id="s104" placeholder="z.B. 192.168.1.104">
+        <div class="card">
+          <h2>Externe Bewegungsmelder</h2>
+          <p class="hint">Je Melder eine stabile Kennung und getrennte EIN-/AUS-Meldungen. Der Nachlauf startet erst, wenn kein aktivierter Melder mehr aktiv ist. Doppelte Meldungen werden nicht doppelt gezaehlt.</p>
+          <div id="motionEditors"></div>
+          <button class="ghost" id="addMotionBtn" type="button" disabled>BWM hinzufuegen</button>
+          <p class="hint" id="motionLimit"></p>
+          <p class="hint">Melde-URLs erst nach dem Speichern verwenden. Optionales Shelly-Polling korrigiert verlorene Events; fuer andere Hersteller Polling ausgeschaltet lassen.</p>
+        </div>
 
-          <div class="row">
-            <div>
-              <label for="ch103">BWM Kanal Shelly 103</label>
-              <select id="ch103"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-            <div>
-              <label for="ch104">BWM Kanal Shelly 104</label>
-              <select id="ch104"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="out103">Lampen Output Shelly 103</label>
-              <select id="out103"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-            <div>
-              <label for="out104">Lampen Output Shelly 104</label>
-              <select id="out104"><option value="0">0</option><option value="1">1</option></select>
-            </div>
-          </div>
+        <div class="card">
+          <h2>Lampen</h2>
+          <p class="hint">Je Lampe ein HTTP-GET-Befehl fuer EIN und AUS, kein Toggle. Nur http://, ohne Anmeldung. Namen und URLs koennen frei angepasst werden.</p>
+          <p class="hint">Automatik umfasst Bewegung und Kurzdruck EIN. Alle EIN/AUS und Langdruck betreffen alle aktivierten Lampen. Speichern setzt die Lampen zunaechst AUS.</p>
+          <div id="lampEditors"></div>
+          <button class="ghost" id="addLampBtn" type="button" disabled>Lampe hinzufuegen</button>
+          <p class="hint" id="lampLimit"></p>
+          <p class="hint">Tests verwenden den gespeicherten Stand. Neue oder geaenderte Lampen zuerst speichern. HTTP-Erfolg bestaetigt nicht den tatsaechlichen Lampenzustand.</p>
         </div>
 
         <div class="card">
@@ -281,36 +296,8 @@
           <label for="eventTimeout">Plausi Timeout BWM Event (ms)</label>
           <input id="eventTimeout" type="number" min="1000" step="1000">
 
-          <div class="row">
-            <div>
-              <label for="pollingEnabled">Shelly Polling aktiv</label>
-              <select id="pollingEnabled"><option value="true">ja</option><option value="false">nein</option></select>
-            </div>
-            <div>
-              <label for="pollingInterval">Shelly Polling Intervall (ms)</label>
-              <input id="pollingInterval" type="number" min="1000" step="500">
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="espPin">ESP BWM Pin</label>
-              <input id="espPin" type="number" min="0" max="39">
-            </div>
-            <div>
-              <label for="espLedPin">ESP BWM LED Pin</label>
-              <input id="espLedPin" type="number" min="0" max="39">
-            </div>
-          </div>
-
-          <div class="row">
-            <div>
-              <label for="espInvert">ESP BWM invertiert</label>
-              <select id="espInvert"><option value="false">nein</option><option value="true">ja</option></select>
-            </div>
-            <div>
-            </div>
-          </div>
+          <label for="pollingInterval">BWM Shelly-Polling Intervall (ms)</label>
+          <input id="pollingInterval" type="number" min="1000" max="60000" step="500">
 
           <div class="row">
             <div>
@@ -388,7 +375,7 @@
         <button class="primary menu-toggle" id="menuBtn" type="button">Menü</button>
         <div class="menu-panel" id="menuPanel">
           <div class="actions">
-            <button class="primary" id="saveBtn" type="button">Speichern</button>
+            <button class="primary" id="saveBtn" type="button" disabled>Speichern</button>
             <a href="/update">OTA Update</a>
             <a href="/status">Raw Status</a>
           </div>
@@ -396,8 +383,187 @@
       </div>
     </div>
 
+    <script src="/lamps.js"></script>
+    <script src="/motion.js"></script>
     <script>
       const q = (id) => document.getElementById(id);
+      let savedLamps = new Map();
+      let maxLamps = 0;
+      let maxMotionSensors = 0;
+
+      function readMotionEditor(editor) {
+        return {
+          id: editor.dataset.id,
+          name: editor.querySelector('[data-field="name"]').value.trim(),
+          enabled: editor.querySelector('[data-field="enabled"]').checked,
+          pollingEnabled: editor.querySelector('[data-field="pollingEnabled"]').checked,
+          pollHost: editor.querySelector('[data-field="pollHost"]').value.trim(),
+          pollChannel: Number(editor.querySelector('[data-field="pollChannel"]').value),
+          legacyNode: editor.dataset.legacyNode
+        };
+      }
+
+      function updateMotionLimit() {
+        const count = q("motionEditors").children.length;
+        q("addMotionBtn").disabled = count >= maxMotionSensors;
+        q("motionLimit").textContent = `${count} / ${maxMotionSensors} externe BWM`;
+      }
+
+      function addMotionEditor(sensor) {
+        const editor = document.createElement("section");
+        editor.className = "motion-editor";
+        editor.dataset.id = sensor.id;
+        editor.dataset.legacyNode = sensor.legacyNode;
+        editor.innerHTML = `
+          <label>Name <input data-field="name" maxlength="80"></label>
+          <label>Kennung <input data-field="id" readonly></label>
+          <label><input data-field="enabled" type="checkbox">Aktiviert</label>
+          <label><input data-field="pollingEnabled" type="checkbox">Shelly-Polling verwenden</label>
+          <label>Polling Host (IP oder Hostname, optional :Port) <input data-field="pollHost" placeholder="192.168.178.103"></label>
+          <label>Eingangskanal <input data-field="pollChannel" type="number" min="0" max="255"></label>
+          <label>EIN-Melde-URL <input data-url="on" readonly></label>
+          <button class="ghost" data-copy="on" type="button">EIN-URL kopieren</button>
+          <label>AUS-Melde-URL <input data-url="off" readonly></label>
+          <button class="ghost" data-copy="off" type="button">AUS-URL kopieren</button>
+          <p class="hint motion-legacy"></p>
+          <p class="hint motion-status" role="status"></p>
+          <button class="ghost" data-remove type="button">Entfernen</button>`;
+        for (const field of ["id", "name", "pollHost", "pollChannel"]) {
+          editor.querySelector(`[data-field="${field}"]`).value = sensor[field];
+        }
+        for (const field of ["enabled", "pollingEnabled"]) {
+          editor.querySelector(`[data-field="${field}"]`).checked = sensor[field];
+        }
+        for (const on of [true, false]) {
+          const field = editor.querySelector(`[data-url="${on ? "on" : "off"}"]`);
+          field.value = motionEventUrl(location.origin, sensor.id, on);
+          editor.querySelector(`[data-copy="${on ? "on" : "off"}"]`).addEventListener("click", async () => {
+            field.focus();
+            field.select();
+            if (!navigator.clipboard || !window.isSecureContext) {
+              q("saveResult").className = "hint";
+              q("saveResult").textContent = "URL markiert. Mit Strg+C oder dem Kopiermenue kopieren.";
+              return;
+            }
+            try {
+              await navigator.clipboard.writeText(field.value);
+              q("saveResult").className = "hint";
+              q("saveResult").textContent = "URL kopiert.";
+            } catch (e) {
+              showError(new Error(`Kopieren fehlgeschlagen: ${e.message}. URL ist zum manuellen Kopieren markiert.`));
+            }
+          });
+        }
+        const pollToggle = editor.querySelector('[data-field="pollingEnabled"]');
+        const updatePolling = () => {
+          editor.querySelector('[data-field="pollHost"]').disabled = !pollToggle.checked;
+          // Legacy event URLs still use this channel even when polling is off.
+          editor.querySelector('[data-field="pollChannel"]').disabled = !pollToggle.checked && !sensor.legacyNode;
+        };
+        pollToggle.addEventListener("change", updatePolling);
+        updatePolling();
+        editor.querySelector(".motion-legacy").textContent = sensor.legacyNode ?
+          `Bisherige URLs mit node=${sensor.legacyNode} funktionieren weiterhin. Kanalfilter entspricht dem Eingangskanal.` : "";
+        editor.querySelector("[data-remove]").addEventListener("click", () => {
+          editor.remove();
+          updateMotionLimit();
+        });
+        q("motionEditors").append(editor);
+        updateMotionLimit();
+      }
+
+      function showError(error) {
+        q("saveResult").className = "err";
+        q("saveResult").textContent = error.message;
+      }
+
+      function readLampEditor(editor) {
+        return {
+          id: editor.dataset.id,
+          name: editor.querySelector('[data-field="name"]').value.trim(),
+          onUrl: editor.querySelector('[data-field="onUrl"]').value.trim(),
+          offUrl: editor.querySelector('[data-field="offUrl"]').value.trim(),
+          enabled: editor.querySelector('[data-field="enabled"]').checked,
+          automation: editor.querySelector('[data-field="automation"]').checked,
+          buttonGuard: editor.querySelector('[data-field="buttonGuard"]').checked
+        };
+      }
+
+      function updateLampEditor(editor) {
+        const lamp = readLampEditor(editor);
+        const saved = savedLamps.get(lamp.id);
+        const canTest = lamp.enabled && saved && JSON.stringify(saved) === JSON.stringify(lamp);
+        editor.querySelectorAll("[data-test]").forEach((button) => { button.disabled = !canTest; });
+        editor.querySelector(".lamp-test-hint").textContent = canTest ? "" : "Zum Testen aktivieren und Aenderungen speichern.";
+      }
+
+      function updateLampLimit() {
+        const count = q("lampEditors").children.length;
+        q("addLampBtn").disabled = count >= maxLamps;
+        q("lampLimit").textContent = `${count} / ${maxLamps} Lampen (ESP32-Speicherlimit)`;
+      }
+
+      function addLampEditor(lamp) {
+        const editor = document.createElement("section");
+        editor.className = "lamp-editor";
+        editor.dataset.id = lamp.id;
+        editor.innerHTML = `
+          <label>Name <input data-field="name" maxlength="80"></label>
+          <label>EIN-URL <input data-field="onUrl" type="url" maxlength="512" placeholder="http://192.168.178.102/rpc/Switch.Set?id=0&on=true"></label>
+          <label>AUS-URL <input data-field="offUrl" type="url" maxlength="512" placeholder="http://192.168.178.102/rpc/Switch.Set?id=0&on=false"></label>
+          <label><input data-field="enabled" type="checkbox">Aktiviert</label>
+          <label><input data-field="automation" type="checkbox">Bei Bewegung / Kurzdruck EIN einschalten</label>
+          <label><input data-field="buttonGuard" type="checkbox">Taster-Rueckkopplungsschutz (Treppen-Shelly)</label>
+          <div class="actions">
+            <button class="ghost" data-test="true" type="button">EIN testen</button>
+            <button class="ghost" data-test="false" type="button">AUS testen</button>
+            <button class="ghost" data-remove type="button">Entfernen</button>
+          </div>
+          <p class="hint lamp-test-hint"></p>
+          <p class="hint lamp-status" role="status"></p>`;
+        for (const field of ["name", "onUrl", "offUrl"]) editor.querySelector(`[data-field="${field}"]`).value = lamp[field];
+        for (const field of ["enabled", "automation", "buttonGuard"]) editor.querySelector(`[data-field="${field}"]`).checked = lamp[field];
+        editor.addEventListener("input", () => updateLampEditor(editor));
+        editor.querySelector("[data-remove]").addEventListener("click", () => {
+          editor.remove();
+          updateLampLimit();
+        });
+        editor.querySelectorAll("[data-test]").forEach((button) => {
+          button.addEventListener("click", async () => {
+            button.disabled = true;
+            try {
+              await lampRequest("/api/manual/relay", { id: lamp.id, on: button.dataset.test === "true" });
+              editor.querySelector(".lamp-status").textContent = "Test angefordert ...";
+              await loadLampStatus();
+            } catch (e) {
+              showError(e);
+            } finally {
+              updateLampEditor(editor);
+            }
+          });
+        });
+        q("lampEditors").append(editor);
+        updateLampEditor(editor);
+        updateLampLimit();
+      }
+
+      async function loadLampStatus() {
+        const state = await lampRequest("/api/status");
+        const local = state.motionSensors.find((sensor) => sensor.local);
+        q("localMotionStatus").textContent = local ? motionStatusText(local) : "";
+        for (const editor of q("motionEditors").children) {
+          const sensor = state.motionSensors.find((entry) => entry.id === editor.dataset.id);
+          const status = editor.querySelector(".motion-status");
+          status.textContent = sensor ? motionStatusText(sensor) : "Noch nicht gespeichert";
+          status.classList.toggle("err", Boolean(sensor && sensor.enabled && (sensor.timedOut || sensor.pollHealthy === false)));
+        }
+        for (const editor of q("lampEditors").children) {
+          const lamp = state.lamps.find((entry) => entry.id === editor.dataset.id);
+          const status = editor.querySelector(".lamp-status");
+          status.textContent = lamp ? lampStatusText(lamp) : "Noch nicht gespeichert";
+          status.classList.toggle("err", Boolean(lamp && lamp.error && !lamp.pending));
+        }
+      }
 
       const toMins = (hhmm) => {
         const [h, m] = (hhmm || "00:00").split(":").map(Number);
@@ -412,20 +578,23 @@
       };
 
       async function loadConfig() {
-        const r = await fetch("/api/config");
-        const c = await r.json();
+        const c = await lampRequest("/api/config");
+        maxLamps = c.maxLamps;
+        maxMotionSensors = c.maxMotionSensors;
+        q("motionEditors").replaceChildren();
+        c.motionSensors.forEach(addMotionEditor);
+        updateMotionLimit();
+        savedLamps = new Map(c.lamps.map((lamp) => [lamp.id, lamp]));
+        q("lampEditors").replaceChildren();
+        c.lamps.forEach(addLampEditor);
+        updateLampLimit();
+        q("saveBtn").disabled = false;
 
         q("s102").value = c.shelly102Ip || "";
-        q("s103").value = c.shelly103Ip || "";
-        q("s104").value = c.shelly104Ip || "";
-        q("ch103").value = String(c.shelly103MotionChannel ?? 0);
-        q("ch104").value = String(c.shelly104MotionChannel ?? 0);
-        q("out103").value = String(c.shelly103OutputChannel ?? 0);
-        q("out104").value = String(c.shelly104OutputChannel ?? 0);
+        q("espEnabled").value = String(c.espMotionEnabled);
         q("motionDelay").value = c.motionOffDelayMs ?? 60000;
         q("buttonDelay").value = c.buttonShortOverrideMs ?? 120000;
         q("eventTimeout").value = c.motionEventTimeoutMs ?? 180000;
-        q("pollingEnabled").value = String(c.shellyPollingEnabled ?? true);
         q("pollingInterval").value = c.shellyPollIntervalMs ?? 5000;
         q("espPin").value = c.espMotionPin ?? 12;
         q("espLedPin").value = c.espMotionLedPin ?? 32;
@@ -448,16 +617,12 @@
       async function saveConfig() {
         const payload = {
           shelly102Ip: q("s102").value.trim(),
-          shelly103Ip: q("s103").value.trim(),
-          shelly104Ip: q("s104").value.trim(),
-          shelly103MotionChannel: Number(q("ch103").value),
-          shelly104MotionChannel: Number(q("ch104").value),
-          shelly103OutputChannel: Number(q("out103").value),
-          shelly104OutputChannel: Number(q("out104").value),
+          espMotionEnabled: q("espEnabled").value === "true",
+          motionSensors: Array.from(q("motionEditors").children, readMotionEditor),
+          lamps: Array.from(q("lampEditors").children, readLampEditor),
           motionOffDelayMs: Number(q("motionDelay").value),
           buttonShortOverrideMs: Number(q("buttonDelay").value),
           motionEventTimeoutMs: Number(q("eventTimeout").value),
-          shellyPollingEnabled: q("pollingEnabled").value === "true",
           shellyPollIntervalMs: Number(q("pollingInterval").value),
           espMotionPin: Number(q("espPin").value),
           espMotionLedPin: Number(q("espLedPin").value),
@@ -476,23 +641,36 @@
           daylightOffsetSec: Number(q("dst").value)
         };
 
-        const r = await fetch("/api/config", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const box = q("saveResult");
-        if (r.ok) {
-          box.className = "ok";
-          box.textContent = "Gespeichert.";
-        } else {
-          box.className = "err";
-          box.textContent = "Speichern fehlgeschlagen.";
+        q("saveBtn").disabled = true;
+        try {
+          await lampRequest("/api/config", payload);
+          savedLamps = new Map(payload.lamps.map((lamp) => [lamp.id, lamp]));
+          Array.from(q("lampEditors").children).forEach(updateLampEditor);
+          q("saveResult").className = "ok";
+          q("saveResult").textContent = "Gespeichert. Lampen werden AUS geschaltet.";
+        } finally {
+          q("saveBtn").disabled = false;
         }
       }
 
-      q("saveBtn").addEventListener("click", saveConfig);
+      q("saveBtn").addEventListener("click", () => saveConfig().catch(showError));
+      q("addLampBtn").addEventListener("click", () => {
+        if (q("lampEditors").children.length >= maxLamps) return;
+        const random = crypto.getRandomValues(new Uint32Array(2));
+        addLampEditor({
+          id: `lamp-${random[0].toString(16)}-${random[1].toString(16)}`,
+          name: "Neue Lampe", onUrl: "", offUrl: "", enabled: true, automation: true, buttonGuard: false
+        });
+      });
+      q("addMotionBtn").addEventListener("click", () => {
+        if (q("motionEditors").children.length >= maxMotionSensors) return;
+        const random = crypto.getRandomValues(new Uint32Array(2));
+        addMotionEditor({
+          id: `bwm-${random[0].toString(16)}-${random[1].toString(16)}`,
+          name: "Neuer BWM", enabled: true, pollingEnabled: false,
+          pollHost: "", pollChannel: 0, legacyNode: ""
+        });
+      });
       q("menuBtn").addEventListener("click", () => {
         q("menuPanel").classList.toggle("open");
       });
@@ -519,7 +697,8 @@
         }
       }
 
-      loadConfig();
+      loadConfig().then(loadLampStatus).catch(showError);
+      setInterval(() => loadLampStatus().catch(showError), 1500);
       loadSunHint();
     </script>
   </body>

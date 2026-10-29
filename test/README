@@ -9,3 +9,52 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+Lamp web regression tests (Node.js, no additional packages):
+  node --test test\web_lamps.test.cjs test\web_motion.test.cjs
+
+These cover JavaScript syntax, command payloads, API error propagation,
+the distinction between sent commands and confirmed lamp state, and the
+shipped lamp configuration. They do not execute the ESP32 HTTP client.
+
+Firmware and LittleFS image:
+  pio run
+  pio run --target buildfs
+
+Browser smoke checks with a simulated API:
+- Add, edit, save, disable and remove a lamp; verify dynamic dashboard rows.
+- Test buttons must be disabled until changes are saved.
+- Verify per-lamp HTTP errors and successful commands without confirmed state.
+- Verify mobile layout and global EIN/AUS payloads.
+
+On-device checks after deployment:
+- Load a legacy configuration without lamps: five outputs must be migrated
+  with the old automation channel selection, including the button guard.
+- Reboot and confirm persistence; an explicitly empty lamp list stays empty.
+- Confirm startup AUS precedes EIN, including motion already active at boot.
+- Verify automation uses only enabled automation lamps; long push/global
+  commands use all enabled lamps. Taster/BWM event endpoints stay unchanged.
+- Make one lamp unreachable: other commands must still be processed, with
+  errors visible in status and logs. Retry explicitly using EIN/AUS.
+- Verify the newest queued command wins, without suppressing startup AUS.
+- Remove, disable or change an enabled lamp: old OFF target is sent.
+- Invalid/duplicate IDs, invalid URLs, more than 32 lamps, and bodies above
+  64 KiB must be rejected without changing the saved configuration.
+
+Motion sensor checks:
+- The web tests cover event URLs, status diagnostics, default migration mapping,
+  and script syntax. Firmware behavior still needs on-device verification.
+- Legacy config without motionSensors migrates 103/104 with old channels,
+  IPs and polling flag; espMotionEnabled defaults true. Reboot preserves it.
+- Disable internal BWM: GPIO activity and node=esp must not count; LED stays off.
+- Add two event-only sensors A and B. Send A EIN twice, B EIN, A AUS twice:
+  active count must be 1 and no OFF countdown may run yet. B AUS starts delay.
+  Send A EIN before expiry: countdown is cancelled, light stays on.
+- Unknown/disabled IDs and missing/invalid state must return 400 without
+  changing any sensor. Wrong legacy channel is ignored with 200.
+- Disable/remove an active sensor via config: it must no longer count.
+- With no motionSensors and internal disabled, active count remains zero.
+- Verify per-sensor timeout, poll failure/recovery, and a newer HTTP event
+  arriving during an older poll. Status includes last source and age.
+- Try 33 sensors, duplicate/reserved IDs, duplicate legacy mappings,
+  invalid polling host/channel and non-boolean enabled: reject atomically.
