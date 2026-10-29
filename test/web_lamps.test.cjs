@@ -33,11 +33,21 @@ test("manual commands send stable IDs and accept HTTP 202 without claiming execu
     calls.push({ url, options });
     return { ok: true, status: 202, json: async () => ({ ok: true, queued: true }) };
   });
+
   const result = await lampRequest("/api/manual/relay", { id: "additional-lamp", on: false });
   assert.equal(result.queued, true);
   assert.equal(calls[0].url, "/api/manual/relay");
   assert.equal(calls[0].options.method, "POST");
   assert.deepEqual(JSON.parse(calls[0].options.body), { id: "additional-lamp", on: false });
+});
+
+test("compact lamp summaries hide routine success without hiding pending commands or failures", () => {
+  const { lampSummaryText } = helpers();
+  assert.equal(lampSummaryText({ enabled: true, lastCommandOn: true, httpCode: 200 }), "");
+  assert.equal(lampSummaryText({ enabled: true }), "");
+  assert.equal(lampSummaryText({ enabled: false, error: "old" }), "Deaktiviert");
+  assert.match(lampSummaryText({ enabled: true, pending: true, requestedOn: false }), /AUS angefordert/);
+  assert.match(lampSummaryText({ enabled: true, error: "offline" }), /offline/);
 });
 
 test("API validation, persistence, busy and network errors propagate to the caller", async () => {

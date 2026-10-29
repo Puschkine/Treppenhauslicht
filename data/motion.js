@@ -18,3 +18,12 @@ function motionStatusText(sensor) {
   }
   return parts.join(" | ");
 }
+
+function motionSummaryText(sensor, overview = false) {
+  if (!sensor.enabled) return "Deaktiviert";
+  const errors = [];
+  if (sensor.timedOut) errors.push("Keine Meldung: Plausibilitaets-Timeout");
+  if (sensor.pollHealthy === false) errors.push("Polling fehlgeschlagen");
+  if (errors.length) return errors.join(" | ");
+  return overview ? "" : sensor.active ? "Bewegung" : "Keine Bewegung";
+}

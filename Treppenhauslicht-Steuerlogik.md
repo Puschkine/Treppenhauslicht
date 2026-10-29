@@ -69,6 +69,13 @@ Die Einstellungsseite beginnt mit drei Geraetelisten: Tasteingaenge, Bewegungsme
 und Lampen. Jede Liste hat einen Create-Button; die Eintraege oeffnen individuelle
 Detailansichten. Der interne BWM ist ein fester, nicht entfernbarer BWM-Eintrag.
 Zeiten, Zeitfenster, Polling-Intervall und NTP liegen unter Allgemeine Einstellungen.
+Startseite und Einstellungen verwenden ein dunkles, Shelly-inspiriertes Farbschema
+mit blauen Akzenten. Geraetelisten zeigen keine laufenden technischen Meldungen:
+In der Einstellungsuebersicht bleiben nur Name, Deaktivierung und Fehler sichtbar.
+Auf der Startseite bleiben Bewegung und ausstehende/fehlgeschlagene Lampenbefehle
+sichtbar, erfolgreiche Lampenbefehle werden nicht dauerhaft wiederholt.
+Vollstaendige Statusdetails stehen in der Elementansicht; Systemdiagnose und
+Debug Log sind auf der Startseite standardmaessig eingeklappt.
 
 Speichern uebernimmt nur den gewaehlten Eintrag, Abbrechen oder Zurueck verwirft
 den Entwurf. Create legt erst beim Speichern einen dauerhaften Eintrag an.

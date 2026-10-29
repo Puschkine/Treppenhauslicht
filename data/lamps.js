@@ -6,6 +6,11 @@ function lampStatusText(lamp) {
   return `Zuletzt ${lamp.lastCommandOn ? "EIN" : "AUS"} gesendet (HTTP ${lamp.httpCode}); Zustand nicht bestaetigt`;
 }
 
+function lampSummaryText(lamp) {
+  if (!lamp.enabled || lamp.pending || lamp.error) return lampStatusText(lamp);
+  return "";
+}
+
 async function lampRequest(url, payload) {
   const options = payload === undefined ? {} : {
     method: "POST",

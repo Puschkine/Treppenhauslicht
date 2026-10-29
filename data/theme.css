@@ -1,0 +1,43 @@
+:root {
+  color-scheme: dark;
+  --bg: #181a1b;
+  --card: #242729;
+  --text: #f0f2f4;
+  --muted: #b1b8bf;
+  --line: #41474d;
+  --soft: #303539;
+  --accent: #1479bd;
+  --forest: #1479bd;
+  --green: #1479bd;
+  --lime: #80caff;
+  --amber: #80caff;
+}
+body { background: var(--bg); color: var(--text); font-family: "Segoe UI", Tahoma, sans-serif; }
+.card, .masthead { background: var(--card); border-color: var(--line); box-shadow: none; }
+.masthead, .automation-switch { color: var(--text); }
+.brand-mark, a, .device-arrow { color: var(--lime); }
+.connection .hint, .auto-label { color: var(--muted); }
+.auto-control { border-color: var(--line); }
+.primary { background: var(--accent); color: #fff; }
+.ghost, .link-button { background: var(--soft); color: var(--text); border-color: var(--line); }
+.danger { background: transparent; color: #ff9292; border-color: #b85d65; }
+.device-item, .relay-row { background: var(--card); border-color: var(--line); color: var(--text); }
+.device-item:hover { background: var(--soft); border-color: var(--lime); }
+.device-name { margin-bottom: 0; }
+.device-summary:not(:empty), .device-status:not(:empty) { margin-top: 5px; }
+.device-summary:empty, .device-status:empty, .lamp-status:empty, .notice:empty, .action-result:empty { display: none; }
+.lamp-status, .motion-status { overflow-wrap: anywhere; }
+.relay-row { min-width: 0; }
+.relay-row > div:first-child { flex: 1; }
+.relay-row .actions { display: flex; }
+input, select { background: var(--bg); color: var(--text); border-color: var(--line); }
+input[readonly], .status, .debuglog { background: var(--bg); color: var(--text); }
+input[type="checkbox"] { accent-color: var(--accent); }
+.automation-switch.is-on { background: #193e57; border-color: var(--accent); color: var(--lime); }
+.automation-switch.is-on::before { background: var(--lime); box-shadow: none; }
+.ok { color: #8ed8ac; }
+.err { color: #ff9292; }
+:focus-visible { outline-color: var(--lime); }
+details.card > summary { cursor: pointer; font-weight: 600; min-height: 28px; }
+details.card[open] > summary { margin-bottom: 14px; }
+details .connection { margin-bottom: 12px; }

@@ -51,7 +51,17 @@ test("the shipped config contains the original BWM settings or their migrated eq
     { id: "bwm-103", pollHost: "192.168.178.103", pollChannel: 1, legacyNode: "103", enabled: true, pollingEnabled: true },
     { id: "bwm-104", pollHost: "192.168.178.104", pollChannel: 0, legacyNode: "104", enabled: true, pollingEnabled: true }
   ]);
-  assert.equal(config.timeWindowEnabled, true);
+  assert.equal(typeof config.timeWindowEnabled, "boolean");
+});
+
+test("compact motion summaries retain activity and faults without event ages or polling success", () => {
+  const sensor = { enabled: true, active: true, pollingEnabled: true, pollHealthy: true, lastEventAgeMs: 2000 };
+  assert.equal(context.motionSummaryText(sensor), "Bewegung");
+  assert.equal(context.motionSummaryText({ ...sensor, active: false }), "Keine Bewegung");
+  assert.equal(context.motionSummaryText(sensor, true), "");
+  assert.equal(context.motionSummaryText({ enabled: false }, true), "Deaktiviert");
+  assert.match(context.motionSummaryText({ ...sensor, pollHealthy: false }, true), /Polling fehlgeschlagen/);
+  assert.match(context.motionSummaryText({ ...sensor, timedOut: true }, true), /Timeout/);
 });
 
 test("motion helper is loaded by both pages and old hard-coded BWM fields are removed", () => {

@@ -35,6 +35,10 @@ Browser smoke checks with a simulated API:
 - Test buttons must be disabled until changes are saved.
 - Verify per-lamp HTTP errors and successful commands without confirmed state.
 - Verify mobile layout and global EIN/AUS payloads.
+- Both pages use the shared dark theme. Settings lists hide routine status text;
+  dashboard lamps show only disabled/pending/error states, BWM rows retain activity.
+- Verify errors remain visible, full details remain in the element editor, and
+  Systemdiagnose/Debug Log are collapsed initially but can still be opened.
 
 On-device checks after deployment:
 - Load a legacy configuration without lamps: five outputs must be migrated

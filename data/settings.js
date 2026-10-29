@@ -123,10 +123,7 @@ function renderOverview() {
     q(`${name}Limit`).textContent = `${items.length} / ${config[kind.limit]}${name === "motion" ? " extern" : ""}`;
     q(`add${name[0].toUpperCase() + name.slice(1)}Btn`).disabled = items.length >= config[kind.limit];
     for (const item of items) {
-      const enabled = item.enabled ? "Aktiviert" : "Deaktiviert";
-      const summary = name === "button" ? `${enabled} | ${item.ip}` :
-        name === "motion" ? `${enabled} | ${item.pollingEnabled ? `Shelly-Polling: ${item.pollHost}` : "HTTP-Events"}` :
-        `${enabled} | ${item.automation ? "Automatik" : "Nur manuell"}`;
+      const summary = name === "button" && !item.enabled ? "Deaktiviert" : "";
       q(`${name}List`).append(makeItem(name, itemKey(name, item), item.name, summary,
         name === "button" ? null : name, item.id));
     }
@@ -138,7 +135,7 @@ function renderOverview() {
     }
   }
   q("motionList").prepend(makeItem("local", "", "Interner BWM",
-    `${config.espMotionEnabled ? "Aktiviert" : "Deaktiviert"} | ESP GPIO ${config.espMotionPin}`, "motion", "esp"));
+    "", "motion", "esp"));
   q("generalBtn").disabled = false;
   renderStatus();
 }
@@ -316,7 +313,11 @@ function renderStatus() {
   for (const element of q("overview").querySelectorAll("[data-kind]")) {
     const motion = element.dataset.kind === "motion";
     const state = (motion ? latestStatus.motionSensors : latestStatus.lamps).find((item) => item.id === element.dataset.id);
-    element.textContent = state ? (motion ? motionStatusText(state) : lampStatusText(state)) : "Status noch nicht verfuegbar";
+    const configured = motion ? (element.dataset.id === "esp" ? { enabled: config.espMotionEnabled } :
+      config.motionSensors.find((item) => item.id === element.dataset.id)) :
+      config.lamps.find((item) => item.id === element.dataset.id);
+    element.textContent = configured && !configured.enabled ? "Deaktiviert" :
+      state ? (motion ? motionSummaryText(state, true) : lampSummaryText(state)) : "";
     element.classList.toggle("err", Boolean(state && state.enabled && (motion ? state.timedOut || state.pollHealthy === false : state.error)));
   }
   if (!selection) return;
@@ -367,7 +368,7 @@ async function initSettings() {
   });
   try {
     config = await lampRequest("/api/config");
-    notify("Eintrag auswaehlen oder mit Create neu anlegen.");
+    notify("");
     renderOverview();
     renderRoute();
   } catch (error) {

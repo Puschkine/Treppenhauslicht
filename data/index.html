@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-    <meta name="theme-color" content="#7b341e">
+    <meta name="theme-color" content="#181a1b">
     <title>Treppenhauslicht Startseite</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -357,6 +357,7 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="/theme.css">
   </head>
   <body>
     <div class="wrap">
@@ -364,17 +365,13 @@
         <div>
           <p class="brand-mark">Hauszentrale / Lichtsteuerung</p>
           <h1>Treppenhauslicht</h1>
-          <div class="connection">
-            <p class="hint" id="ipSummary">STA: - | AP: -</p>
-            <p class="hint" id="espClock">ESP Uhrzeit: -</p>
-          </div>
         </div>
         <div class="auto-control">
           <span class="auto-label">Automatikbetrieb</span>
           <button id="automationBtn" class="automation-switch" type="button" aria-pressed="false">-</button>
         </div>
       </header>
-      <p id="actionResult" class="hint action-result" role="status" aria-live="polite">Bereit.</p>
+      <p id="actionResult" class="hint action-result" role="status" aria-live="polite"></p>
 
       <div class="grid">
         <div class="card">
@@ -402,32 +399,29 @@
             <div class="relay-list" id="motionList"></div>
           </div>
           <div class="card">
-            <div class="card-heading">
-              <div>
-                <span class="section-kicker">System</span>
-                <h2>Status</h2>
-              </div>
-            </div>
-            <div class="status" id="statusBox">Lade...</div>
             <div class="actions card-links">
               <a class="linkbtn ghost" href="/settings.html">Einstellungen</a>
               <a class="linkbtn ghost" href="/update">OTA Update</a>
             </div>
           </div>
 
-          <div class="card">
-            <div class="card-heading">
-              <div>
-                <span class="section-kicker">Diagnose</span>
-                <h2>Debug Log</h2>
-              </div>
+          <details class="card" id="systemDetails">
+            <summary>Systemdiagnose</summary>
+            <div class="connection">
+              <p class="hint" id="ipSummary">STA: - | AP: -</p>
+              <p class="hint" id="espClock">ESP Uhrzeit: -</p>
             </div>
+            <div class="status" id="statusBox">Lade...</div>
+          </details>
+
+          <details class="card" id="logDetails">
+            <summary>Debug Log</summary>
             <div class="debuglog" id="logBox">Lade Debug-Ausgaben...</div>
             <div class="actions card-links">
               <button class="ghost" id="refreshLogBtn" type="button">Log aktualisieren</button>
               <button class="ghost" id="clearLogBtn" type="button">Log leeren</button>
             </div>
-          </div>
+          </details>
         </div>
       </div>
     </div>
@@ -462,7 +456,7 @@
         for (const row of q("motionList").children) {
           const sensor = sensors.find((entry) => entry.id === row.dataset.id);
           const status = row.querySelector(".motion-status");
-          status.textContent = motionStatusText(sensor);
+          status.textContent = motionSummaryText(sensor);
           status.classList.toggle("err", sensor.enabled && (sensor.timedOut || sensor.pollHealthy === false));
         }
       }
@@ -516,7 +510,7 @@
         for (const row of q("lampList").querySelectorAll(".relay-row")) {
           const lamp = lamps.find((entry) => entry.id === row.dataset.id);
           const status = row.querySelector(".lamp-status");
-          status.textContent = lampStatusText(lamp);
+          status.textContent = lampSummaryText(lamp);
           status.classList.toggle("err", Boolean(lamp.error) && !lamp.pending);
         }
       }

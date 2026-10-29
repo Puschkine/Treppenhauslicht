@@ -82,11 +82,24 @@ test("hidden general controls preserve their saved values instead of submitting 
       };
     }
   });
+
   vm.runInContext('selection = { kind: "general", original }', sandbox);
   const value = sandbox.readDetail();
   assert.equal(value.motionStartMin, 360);
   assert.equal(value.motionEndMin, 1200);
   assert.equal(value.ntpServer, "pool.ntp.org");
+});
+
+test("both pages share the dark theme and dashboard diagnostics are collapsed", () => {
+  for (const file of ["settings.html", "index.html"]) {
+    const html = fs.readFileSync(path.join(data, file), "utf8");
+    assert.match(html, /<link rel="stylesheet" href="\/theme.css">/);
+    assert.match(html, /name="theme-color" content="#181a1b"/);
+  }
+  const html = fs.readFileSync(path.join(data, "index.html"), "utf8");
+  assert.match(html, /<details class="card" id="systemDetails">/);
+  assert.match(html, /<details class="card" id="logDetails">/);
+  assert.match(fs.readFileSync(path.join(data, "theme.css"), "utf8"), /color-scheme: dark/);
 });
 
 test("failed conflict checks retain the draft but refresh the snapshot for Cancel and reopen", async () => {
