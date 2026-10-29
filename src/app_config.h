@@ -6,6 +6,14 @@
 
 constexpr size_t MAX_LAMPS = 32;
 constexpr size_t MAX_MOTION_SENSORS = 32;
+constexpr size_t MAX_BUTTON_SOURCES = 32;
+
+struct ButtonSourceConfig {
+  String name;
+  String ip;
+  bool enabled = true;
+  bool buttonGuard = false;
+};
 
 struct MotionSensorConfig {
   String id;
@@ -29,7 +37,7 @@ struct LampConfig {
 
 struct AppConfig {
   AppConfig();
-  String shelly102Ip = "192.168.178.102";
+  std::vector<ButtonSourceConfig> buttonSources;
   std::vector<LampConfig> lamps;
   std::vector<MotionSensorConfig> motionSensors;
   bool espMotionEnabled = true;
@@ -59,6 +67,8 @@ void writeLampConfig(JsonArray array, const std::vector<LampConfig> &lamps);
 bool readLampConfig(JsonVariantConst value, std::vector<LampConfig> &lamps, String &error);
 void writeMotionConfig(JsonArray array, const std::vector<MotionSensorConfig> &sensors);
 bool readMotionConfig(JsonVariantConst value, std::vector<MotionSensorConfig> &sensors, String &error);
+void writeButtonConfig(JsonArray array, const std::vector<ButtonSourceConfig> &sources);
+bool readButtonConfig(JsonVariantConst value, std::vector<ButtonSourceConfig> &sources, String &error);
 void applyTimeConfig(const AppConfig &cfg);
 bool saveConfig(const AppConfig &cfg);
 bool loadConfig(AppConfig &cfg);

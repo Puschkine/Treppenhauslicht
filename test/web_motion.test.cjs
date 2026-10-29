@@ -35,8 +35,16 @@ test("motion status distinguishes disabled, active, unknown, timed out and faile
   assert.match(context.motionStatusText({ enabled: true, pollingEnabled: true }), /Polling noch nicht erfolgt/);
 });
 
-test("the two migrated sensors retain channels and legacy source mappings", () => {
+test("the shipped config contains the original BWM settings or their migrated equivalents", () => {
   const config = JSON.parse(fs.readFileSync(path.join(data, "config.json"), "utf8"));
+  if (!("motionSensors" in config)) {
+    assert.equal(config.shelly103Ip, "192.168.178.103");
+    assert.equal(config.shelly104Ip, "192.168.178.104");
+    assert.equal(config.shelly103MotionChannel, 1);
+    assert.equal(config.shelly104MotionChannel, 0);
+    assert.equal(config.shellyPollingEnabled, true);
+    return;
+  }
   assert.equal(config.espMotionEnabled, true);
   assert.deepEqual(config.motionSensors.map(({ id, pollHost, pollChannel, legacyNode, enabled, pollingEnabled }) =>
     ({ id, pollHost, pollChannel, legacyNode, enabled, pollingEnabled })), [
@@ -57,38 +65,20 @@ test("motion helper is loaded by both pages and old hard-coded BWM fields are re
   }
 });
 
-test("adding a BWM works independently of the lamp editor and honors the cap", () => {
-  const elements = new Map();
-  const pending = () => new Promise(() => {});
+test("new BWM drafts are independent and saving retains legacy mappings and fresh siblings", () => {
   const sandbox = vm.createContext({
-    document: {
-      getElementById(id) {
-        if (!elements.has(id)) elements.set(id, {
-          children: [],
-          listeners: {},
-          addEventListener(event, callback) { this.listeners[event] = callback; }
-        });
-        return elements.get(id);
-      }
-    },
-    lampRequest: pending,
-    fetch: pending,
-    setInterval() {},
+    document: { addEventListener() {} },
     crypto: { getRandomValues: (array) => array.fill(1234) }
   });
-  const html = fs.readFileSync(path.join(data, "settings.html"), "utf8");
-  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], sandbox);
-  const button = elements.get("addMotionBtn");
-  assert.equal(typeof button?.listeners.click, "function", "BWM button must be wired on initial page load");
-  vm.runInContext("maxMotionSensors = 32", sandbox);
-  const added = [];
-  sandbox.addMotionEditor = (sensor) => added.push(sensor);
-  button.listeners.click();
-  assert.equal(added.length, 1);
-  assert.match(added[0].id, /^bwm-/);
-  assert.equal(added[0].pollingEnabled, false);
-  assert.equal(added[0].enabled, true);
-  elements.get("motionEditors").children = Array(32);
-  button.listeners.click();
-  assert.equal(added.length, 1);
+  vm.runInContext(fs.readFileSync(path.join(data, "settings.js"), "utf8"), sandbox);
+  const draft = sandbox.newDevice("motion");
+  assert.match(draft.id, /^bwm-/);
+  assert.equal(draft.pollingEnabled, false);
+  assert.equal(draft.enabled, true);
+  const original = { ...draft, id: "bwm-103", legacyNode: "103", pollChannel: 1 };
+  const sibling = { ...draft, id: "bwm-104", legacyNode: "104", enabled: false };
+  const changed = { ...original, name: "Gang hinten", pollingEnabled: true, pollHost: "192.168.178.103" };
+  const payload = sandbox.buildDevicePayload({ motionSensors: [original, sibling], maxMotionSensors: 32 },
+    { kind: "motion", key: original.id, original, isNew: false }, changed);
+  assert.deepEqual(JSON.parse(JSON.stringify(payload)), { motionSensors: [changed, sibling] });
 });

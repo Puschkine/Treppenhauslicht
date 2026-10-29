@@ -11,17 +11,26 @@ More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
 
 Lamp web regression tests (Node.js, no additional packages):
-  node --test test\web_lamps.test.cjs test\web_motion.test.cjs
+  node --test test\web_lamps.test.cjs test\web_motion.test.cjs test\web_buttons.test.cjs test\web_settings.test.cjs
 
 These cover JavaScript syntax, command payloads, API error propagation,
 the distinction between sent commands and confirmed lamp state, and the
 shipped lamp configuration. They do not execute the ESP32 HTTP client.
+Settings tests cover per-element partial saves, fresh sibling preservation,
+concurrent edit/removal conflicts, source identity changes, duplicates, limits,
+and isolation of local BWM and general settings.
 
 Firmware and LittleFS image:
   pio run
   pio run --target buildfs
 
 Browser smoke checks with a simulated API:
+- Verify three device lists with Create buttons and a fixed internal BWM entry.
+- Create opens a draft detail page; Cancel/Back discard without any config POST.
+- Save changes only the selected entry; general/local edits send only their fields.
+- Verify failed saves keep the draft, and conflicts can be resolved by cancelling
+  and reopening the entry. Status polling must not overwrite edits or save errors.
+- Switch fixed/sun time windows; hidden controls must not block form validation.
 - Add, edit, save, disable and remove a lamp; verify dynamic dashboard rows.
 - Test buttons must be disabled until changes are saved.
 - Verify per-lamp HTTP errors and successful commands without confirmed state.
@@ -58,3 +67,16 @@ Motion sensor checks:
   arriving during an older poll. Status includes last source and age.
 - Try 33 sensors, duplicate/reserved IDs, duplicate legacy mappings,
   invalid polling host/channel and non-boolean enabled: reject atomically.
+
+Button source checks:
+- Web tests cover independent addition, the 32-source UI cap, source fields,
+  activation/guard options and saving complete or explicitly empty lists.
+- On device, verify migration of shelly102Ip, including an empty old IP,
+  and persistence of added, edited, disabled and removed sources after reboot.
+- POST invalid/duplicate IPs, malformed options and 33 sources: reject without
+  changing the saved configuration.
+- Send short/long events from each enabled IP: same existing button behavior.
+  Disabled, removed and unlisted IPs must receive 403.
+- Guarded sources receive 409 during the existing protected-lamp command window;
+  independent unguarded sources still work. Old Shelly 102 URLs stay valid.
+- The existing source=ui test bypass stays unchanged, including with an empty list.

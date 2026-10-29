@@ -20,6 +20,12 @@ Die Firmware muss in Module aufgeteilt sein:
 
 ### AR-02 Webbasierte Konfiguration
 Der ESP32 muss eine Weboberflaeche zur Laufzeit-Konfiguration bereitstellen.
+Die Einstellungsseite zeigt getrennte Listen fuer Tasteingaenge, Bewegungsmelder
+und Lampen mit jeweils einem Create-Button. Jeder Eintrag oeffnet seine eigene
+Detailansicht. Der interne BWM wird als fester Eintrag in der BWM-Liste angezeigt.
+Speichern uebernimmt nur das bearbeitete Element; Abbrechen oder Zurueck verwirft
+dessen Entwurf. Neue Elemente werden erst beim Speichern angelegt.
+Allgemeine Einstellungen fuer Zeiten, Polling und NTP stehen separat.
 
 ### AR-03 Persistente Konfiguration
 Alle Einstellungen muessen persistent in LittleFS als JSON gespeichert werden.
@@ -107,7 +113,10 @@ Wiederherstellung nach Polling-Fehler muss erkannt und geloggt werden.
 
 ## 7. Sicherheits- und Plausibilitaetsregeln fuer API
 ### API-01 Button-Quelle
-Button-Events duerfen nur von Shelly 102 oder explizit als UI-Testquelle akzeptiert werden.
+Button-Events duerfen nur von aktivierten, konfigurierten IPv4-Quellen oder
+explizit als bestehende UI-Testquelle akzeptiert werden. Tasterquellen sind als
+Liste mit Name, IP, Aktivierung und optionalem Rueckkopplungsschutz erweiterbar.
+Die bisherige Shelly-102-IP wird beim Laden alter Konfigurationen uebernommen.
 
 ### API-02 Button-Action-Validierung
 Nur explizite Short- oder Long-Buttonaktionen duerfen ausgefuehrt werden.
@@ -148,7 +157,7 @@ Zeitdaten muessen fuer das BWM-Zeitfenster verwendet werden.
 ## 10. Konfigurations-Anforderungen
 ### CFG-01 Pflichtparameter
 Konfigurierbare Parameter:
-- shelly102Ip
+- buttonSources (bis zu 32 Eintraege mit name, ip, enabled, buttonGuard)
 - espMotionEnabled
 - motionSensors (id, name, enabled, pollingEnabled, pollHost, pollChannel, legacyNode)
 - lamps (bis zu 32 Eintraege mit id, name, onUrl, offUrl, enabled, automation, buttonGuard)
@@ -174,7 +183,7 @@ Konfigurierbare Parameter:
 
 ### CFG-02 Defaultwerte
 Defaultwerte:
-- shelly102Ip = 192.168.178.102
+- buttonSources = Treppen-Shelly, IP 192.168.178.102, aktiviert, Rueckkopplungsschutz aktiv
 - espMotionEnabled = true
 - motionSensors = bwm-103 (192.168.178.103, Kanal 1) und bwm-104 (192.168.178.104, Kanal 0),
   aktiviert und mit Shelly-Polling; alte node-URLs bleiben kompatibel.

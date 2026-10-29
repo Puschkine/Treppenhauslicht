@@ -53,6 +53,7 @@ test("API validation, persistence, busy and network errors propagate to the call
 
 test("both HTML scripts and the shared helper have valid JavaScript syntax", () => {
   new vm.Script(source);
+  new vm.Script(fs.readFileSync(path.join(data, "settings.js"), "utf8"));
   for (const file of ["index.html", "settings.html"]) {
     const html = fs.readFileSync(path.join(data, file), "utf8");
     assert.match(html, /<script src="\/lamps.js"><\/script>/);

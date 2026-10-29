@@ -2,6 +2,7 @@
 
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <IPAddress.h>
 #include <time.h>
 
 #include "debug_log.h"
@@ -103,7 +104,12 @@ String buildTimeZone(const AppConfig &cfg)
 
 AppConfig::AppConfig()
 {
-  lamps = legacyLamps(shelly102Ip, "192.168.178.103", "192.168.178.104", 0, 0);
+  ButtonSourceConfig source;
+  source.name = "Treppen-Shelly";
+  source.ip = "192.168.178.102";
+  source.buttonGuard = true;
+  buttonSources.push_back(source);
+  lamps = legacyLamps(source.ip, "192.168.178.103", "192.168.178.104", 0, 0);
   for (uint8_t node : {103, 104}) {
     MotionSensorConfig sensor;
     sensor.id = "bwm-" + String(node);
@@ -114,6 +120,53 @@ AppConfig::AppConfig()
     sensor.legacyNode = String(node);
     motionSensors.push_back(sensor);
   }
+}
+
+void writeButtonConfig(JsonArray array, const std::vector<ButtonSourceConfig> &sources)
+{
+  for (const ButtonSourceConfig &source : sources) {
+    JsonObject item = array.add<JsonObject>();
+    item["name"] = source.name;
+    item["ip"] = source.ip;
+    item["enabled"] = source.enabled;
+    item["buttonGuard"] = source.buttonGuard;
+  }
+}
+
+bool readButtonConfig(JsonVariantConst value, std::vector<ButtonSourceConfig> &sources, String &error)
+{
+  if (!value.is<JsonArrayConst>() || value.size() > MAX_BUTTON_SOURCES) {
+    error = "buttonSources muss eine Liste mit maximal " + String(MAX_BUTTON_SOURCES) + " Eintraegen sein";
+    return false;
+  }
+  std::vector<ButtonSourceConfig> parsed;
+  for (JsonObjectConst item : value.as<JsonArrayConst>()) {
+    ButtonSourceConfig source;
+    source.name = item["name"].as<String>();
+    source.ip = item["ip"].as<String>();
+    source.enabled = item["enabled"] | true;
+    source.buttonGuard = item["buttonGuard"] | false;
+    String name = source.name;
+    name.trim();
+    IPAddress address;
+    if (!item["name"].is<String>() || name.isEmpty() || source.name.length() > 80 ||
+        !item["ip"].is<String>() || !address.fromString(source.ip) || address.toString() != source.ip ||
+        address[0] == 0 || address[0] >= 224 || source.ip == "255.255.255.255" ||
+        (!item["enabled"].isUnbound() && !item["enabled"].is<bool>()) ||
+        (!item["buttonGuard"].isUnbound() && !item["buttonGuard"].is<bool>())) {
+      error = "Ungueltige Tasterquelle: Name, IPv4-Adresse und Optionen pruefen";
+      return false;
+    }
+    for (const ButtonSourceConfig &existing : parsed) {
+      if (existing.ip == source.ip) {
+        error = "Doppelte IP-Adresse in den Tasterquellen";
+        return false;
+      }
+    }
+    parsed.push_back(source);
+  }
+  sources = std::move(parsed);
+  return true;
 }
 
 void writeMotionConfig(JsonArray array, const std::vector<MotionSensorConfig> &sensors)
@@ -240,7 +293,7 @@ void applyTimeConfig(const AppConfig &cfg)
 bool saveConfig(const AppConfig &cfg)
 {
   JsonDocument doc;
-  doc["shelly102Ip"] = cfg.shelly102Ip;
+  writeButtonConfig(doc["buttonSources"].to<JsonArray>(), cfg.buttonSources);
   writeMotionConfig(doc["motionSensors"].to<JsonArray>(), cfg.motionSensors);
   doc["espMotionEnabled"] = cfg.espMotionEnabled;
   writeLampConfig(doc["lamps"].to<JsonArray>(), cfg.lamps);
@@ -308,7 +361,25 @@ bool loadConfig(AppConfig &cfg)
     return false;
   }
 
-  cfg.shelly102Ip = doc["shelly102Ip"] | cfg.shelly102Ip;
+  const String ip102 = doc["shelly102Ip"] | "192.168.178.102";
+  const bool migrateButtons = doc["buttonSources"].isUnbound();
+  if (migrateButtons) {
+    cfg.buttonSources.clear();
+    if (!ip102.isEmpty()) {
+      ButtonSourceConfig source;
+      source.name = "Treppen-Shelly";
+      source.ip = ip102;
+      source.buttonGuard = true;
+      cfg.buttonSources.push_back(source);
+    }
+  } else {
+    String error;
+    if (!readButtonConfig(doc["buttonSources"], cfg.buttonSources, error)) {
+      appLogf(APP_LOG_LEVEL, "config.json: %s", error.c_str());
+      cfg.buttonSources.clear();
+      return false;
+    }
+  }
   const String ip103 = doc["shelly103Ip"] | "192.168.178.103";
   const String ip104 = doc["shelly104Ip"] | "192.168.178.104";
   const bool migrateMotion = doc["motionSensors"].isUnbound();
@@ -331,7 +402,7 @@ bool loadConfig(AppConfig &cfg)
   cfg.espMotionEnabled = doc["espMotionEnabled"] | true;
   const bool migrate = doc["lamps"].isUnbound();
   if (migrate) {
-    cfg.lamps = legacyLamps(cfg.shelly102Ip, ip103, ip104,
+    cfg.lamps = legacyLamps(ip102, ip103, ip104,
                             doc["shelly103OutputChannel"] | 0, doc["shelly104OutputChannel"] | 0);
   } else {
     String error;
@@ -361,8 +432,9 @@ bool loadConfig(AppConfig &cfg)
   cfg.ntpServer = doc["ntpServer"] | cfg.ntpServer;
   cfg.gmtOffsetSec = doc["gmtOffsetSec"] | cfg.gmtOffsetSec;
   cfg.daylightOffsetSec = doc["daylightOffsetSec"] | cfg.daylightOffsetSec;
-  if (migrate || migrateMotion) {
-    appLogf(APP_LOG_LEVEL, "Konfiguration migriert: Lampen=%s, BWM=%s", migrate ? "ja" : "nein", migrateMotion ? "ja" : "nein");
+  if (migrate || migrateMotion || migrateButtons) {
+    appLogf(APP_LOG_LEVEL, "Konfiguration migriert: Lampen=%s, BWM=%s, Taster=%s",
+            migrate ? "ja" : "nein", migrateMotion ? "ja" : "nein", migrateButtons ? "ja" : "nein");
     return saveConfig(cfg);
   }
   return true;

@@ -65,7 +65,20 @@ Langer Tastendruck:
 - Uhrzeit wird fuer Zeitfensterlogik genutzt
 
 ## Konfigurierbare Parameter im Webserver
-- Shelly 102 IP
+Die Einstellungsseite beginnt mit drei Geraetelisten: Tasteingaenge, Bewegungsmelder
+und Lampen. Jede Liste hat einen Create-Button; die Eintraege oeffnen individuelle
+Detailansichten. Der interne BWM ist ein fester, nicht entfernbarer BWM-Eintrag.
+Zeiten, Zeitfenster, Polling-Intervall und NTP liegen unter Allgemeine Einstellungen.
+
+Speichern uebernimmt nur den gewaehlten Eintrag, Abbrechen oder Zurueck verwirft
+den Entwurf. Create legt erst beim Speichern einen dauerhaften Eintrag an.
+Vor dem Speichern wird die aktuelle Konfiguration geladen: andere Eintraege
+bleiben erhalten, gleichzeitig geaenderte/entfernte Eintraege werden als Konflikt
+gemeldet. Abbrechen und erneutes Oeffnen laedt dann den zuletzt gelesenen Stand.
+Speichern initialisiert wie bisher die Steuerung neu und fordert Lampen AUS an.
+Lampen-Tests sind nur fuer gespeicherte, aktivierte und unveraenderte Eintraege moeglich.
+
+- Erlaubte Tasterquellen: Name, IPv4-Adresse, aktiviert, Rueckkopplungsschutz
 - Internen BWM verwenden ja/nein
 - Externe BWM-Liste: Kennung, Name, aktiviert, optional Shelly-Polling, Host und Eingangskanal
 - Lampenliste: ID, Name, EIN-/AUS-URL, aktiviert, Automatik und Taster-Rueckkopplungsschutz
@@ -93,7 +106,7 @@ Langer Tastendruck:
   Langdruck, Alle EIN/AUS, Kurzdruck AUS und Force OFF betreffen alle aktivierten Lampen.
 - `buttonGuard` aktiviert fuer Schaltbefehle an den Treppen-Shelly den bestehenden
   Schutz vor Taster-Uebersprechen. Bei dessen Lampe muss die Option aktiviert bleiben.
-- Die Taster-IP und Polling-Hosts gelten fuer Tasterquelle und BWM-Polling.
+- Die Tasterquellen-IPs und Polling-Hosts gelten fuer Tasterereignisse und BWM-Polling.
   Aenderungen daran schreiben keine Lampen-URLs um; bei einer IP-Aenderung auch
   die betreffenden EIN-/AUS-URLs aktualisieren.
 - Alte Konfigurationen ohne `lamps` werden automatisch in fuenf Lampen ueberfuehrt
@@ -169,6 +182,30 @@ API:
 - Startseite und Einstellungen zeigen alle Melder mit Name, Aktivzustand, letzter Meldung,
   Timeout und Polling-Fehlern. Alte Statusfelder `motionEsp`, `motion103`, `motion104`
   bleiben fuer bestehende Clients erhalten.
+
+### Erweiterbare Tasterquellen
+- `buttonSources` enthaelt maximal 32 Quellen mit `name`, `ip`, `enabled` und `buttonGuard`.
+  Name: maximal 80 UTF-8-Bytes, nicht leer. IP: eindeutige IPv4-Unicastadresse in
+  dezimaler Schreibweise ohne fuehrende Nullen, Hostnamen oder Ports.
+- In den Einstellungen koennen Quellen hinzugefuegt, entfernt und deaktiviert werden.
+  Neue Quellen sind aktiviert, ihr Rueckkopplungsschutz ist zunaechst aus.
+- Alle Quellen verwenden unveraendert `/api/event/button?type=short` und `?type=long`;
+  keine ID ist erforderlich. Autorisiert wird die tatsaechliche TCP-Absender-IP,
+  nicht ein vom Aufrufer uebermittelter Quellenname.
+- Bei Konfigurationen ohne `buttonSources` wird `shelly102Ip` als Treppen-Shelly
+  mit aktiviertem Rueckkopplungsschutz uebernommen und persistent migriert.
+  Eine bisher leere IP oder eine explizit leere Liste erlaubt keine normalen Tasterquellen.
+- `/api/config` liefert `buttonSources` und `maxButtonSources`; POST validiert die
+  gesamte Liste, einschliesslich deaktivierter Quellen, vor dem Speichern.
+- Nicht erlaubte/deaktivierte Absender werden weiterhin mit HTTP 403 abgelehnt.
+- `buttonGuard` aktiviert fuer diese Quelle die bestehende globale 1500-ms-Sperre
+  nach Lampenbefehlen, deren Lampenkonfiguration ebenfalls `buttonGuard=true` hat.
+  Fuer den Treppen-Shelly beibehalten, fuer unabhaengige Taster ausgeschaltet lassen.
+  Dies ist keine zusaetzliche Entprellung und keine individuelle Lampen-Zuordnung.
+- Der bestehende explizite Testzugang `source=ui` bleibt unveraendert: er umgeht
+  Quellenpruefung und Rueckkopplungsschutz, auch bei leerer Liste.
+  Die Quellenliste ist daher keine vollstaendige Authentifizierung.
+- Bestehende Taster-Aktionsauswertung, Short-/Long-Verhalten und Lampen-URLs bleiben unveraendert.
 
 ## Sourcecode Beschreibung
 Die Firmware ist modular aufgebaut. Der Einstieg liegt in main.cpp, Logik und APIs sind getrennt.
@@ -284,7 +321,7 @@ Die genaue Bezeichnung der Menuepunkte kann je nach Shelly Firmware leicht abwei
    - Zeitfenster ausserhalb und innerhalb pruefen
 
 ## Aktuell gesetzte Defaults
-- Shelly 102 IP: 192.168.178.102
+- Tasterquelle Treppen-Shelly: 192.168.178.102, aktiviert mit Rueckkopplungsschutz
 - Shelly 103 IP: 192.168.178.103
 - Shelly 103 BWM Input: 1
 - Shelly 103 Lampen Output: 0

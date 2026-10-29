@@ -67,7 +67,8 @@ String buildStateJson(const AppConfig &cfg, const LightingController &controller
 String buildConfigJson(const AppConfig &cfg)
 {
   JsonDocument doc;
-  doc["shelly102Ip"] = cfg.shelly102Ip;
+  writeButtonConfig(doc["buttonSources"].to<JsonArray>(), cfg.buttonSources);
+  doc["maxButtonSources"] = MAX_BUTTON_SOURCES;
   writeMotionConfig(doc["motionSensors"].to<JsonArray>(), cfg.motionSensors);
   doc["espMotionEnabled"] = cfg.espMotionEnabled;
   doc["maxMotionSensors"] = MAX_MOTION_SENSORS;
@@ -103,9 +104,6 @@ String buildConfigJson(const AppConfig &cfg)
 
 void applyJsonConfig(const JsonDocument &doc, AppConfig &cfg)
 {
-  if (doc["shelly102Ip"].is<String>()) {
-    cfg.shelly102Ip = doc["shelly102Ip"].as<String>();
-  }
   if (doc["espMotionEnabled"].is<bool>()) {
     cfg.espMotionEnabled = doc["espMotionEnabled"].as<bool>();
   }
@@ -230,6 +228,19 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
 
         AppConfig updated = cfg;
         applyJsonConfig(doc, updated);
+        if (!doc["buttonSources"].isUnbound()) {
+          String error;
+          if (!readButtonConfig(doc["buttonSources"], updated.buttonSources, error)) {
+            appLogf(APP_LOG_LEVEL, "Konfiguration abgelehnt: %s", error.c_str());
+            JsonDocument response;
+            response["ok"] = false;
+            response["error"] = error;
+            String payload;
+            serializeJson(response, payload);
+            request->send(400, "application/json", payload);
+            return;
+          }
+        }
         String motionError;
         if (!doc["espMotionEnabled"].isUnbound() && !doc["espMotionEnabled"].is<bool>()) {
           motionError = "espMotionEnabled muss true oder false sein";
@@ -328,22 +339,28 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
     }
     type.toLowerCase();
 
-    bool fromShelly102 = cfg.shelly102Ip.length() > 0 && remoteIp == cfg.shelly102Ip;
+    const ButtonSourceConfig *source = nullptr;
+    for (const ButtonSourceConfig &candidate : cfg.buttonSources) {
+      if (candidate.enabled && candidate.ip == remoteIp) {
+        source = &candidate;
+        break;
+      }
+    }
     bool fromUiTest = request->hasParam("source") && request->getParam("source")->value() == "ui";
 
     appLogf(APP_LOG_LEVEL, "Button Event Request von %s: type='%s' action='%s'",
             remoteIp.c_str(), type.c_str(), actionRaw.c_str());
 
-    if (!fromShelly102 && !fromUiTest) {
+    if (!source && !fromUiTest) {
       appLogf(APP_LOG_LEVEL, "Button Event verworfen: ungueltige Quelle %s", remoteIp.c_str());
       request->send(403, "application/json", "{\"ok\":false,\"error\":\"forbidden_source\"}");
       return;
     }
 
-    if (fromShelly102 && !fromUiTest && controller.isShelly102CommandRecent(BUTTON_CROSSTALK_GUARD_MS)) {
+    if (source && source->buttonGuard && !fromUiTest && controller.isShelly102CommandRecent(BUTTON_CROSSTALK_GUARD_MS)) {
       appLogf(APP_LOG_LEVEL,
-              "Button Event verworfen: plausibles Uebersprechen nach Shelly102-Schalten (%lu ms)",
-              BUTTON_CROSSTALK_GUARD_MS);
+              "Button Event von %s verworfen: plausibles Uebersprechen nach geschuetztem Lampenbefehl (%lu ms)",
+              source->name.c_str(), BUTTON_CROSSTALK_GUARD_MS);
       request->send(409, "application/json", "{\"ok\":false,\"error\":\"button_crosstalk_guard\"}");
       return;
     }
