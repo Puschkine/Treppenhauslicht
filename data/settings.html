@@ -83,7 +83,6 @@
     <main class="wrap">
       <header class="card">
         <h1>Treppenhauslicht Einstellungen</h1>
-        <p class="lead">Eingaenge und Lampen verwalten</p>
         <a href="/">Zur Startseite</a>
         <p id="saveResult" class="notice hint" role="status" aria-live="polite">Lade Einstellungen ...</p>
         <p id="statusError" class="notice err" role="status" hidden></p>
@@ -114,7 +113,16 @@
             <a class="link-button" href="/update">OTA Update</a>
             <a class="link-button" href="/status">Raw Status</a>
           </div>
-          <p class="hint">Zeitfenster, Nachlauf, Polling-Intervall und NTP sind unter Allgemeine Einstellungen zu finden.</p>
+          <h3>Konfigurationssicherung</h3>
+          <div class="actions">
+            <button class="ghost" id="backupBtn" type="button" disabled>In Preferences sichern</button>
+            <button class="ghost" id="restoreBtn" type="button" disabled>Wiederherstellen</button>
+          </div>
+          <p class="hint" id="backupStatus" role="status">Lade Sicherung ...</p>
+          <details>
+            <summary>Hinweise</summary>
+            <p class="hint">Die Sicherung bleibt bei einem reinen LittleFS-Update erhalten. Wiederherstellen ersetzt die aktuelle Konfiguration und schaltet Lampen AUS. Nur manuelle Wiederherstellung; ein vollstaendiges Loeschen des Flashs oder Aendern der NVS-Partition kann die Sicherung entfernen. Erneutes Sichern ersetzt die bisherige Sicherung.</p>
+          </details>
         </section>
       </section>
 
@@ -124,7 +132,8 @@
         <p class="hint" id="detailHint"></p>
         <form id="elementForm">
           <fieldset id="detailFields"></fieldset>
-          <p id="detailStatus" class="hint" role="status"></p>
+          <p id="detailError" class="err" role="status" hidden></p>
+          <details id="detailDiagnostics"><summary>Statusdetails</summary><p id="detailStatus" class="hint" role="status"></p></details>
           <div class="actions detail-actions">
             <div class="actions">
               <button class="primary" id="saveBtn" type="submit">Speichern</button>

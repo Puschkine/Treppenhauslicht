@@ -3,6 +3,9 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <IPAddress.h>
+#include <Preferences.h>
+#include <limits.h>
+#include <math.h>
 #include <time.h>
 
 #include "debug_log.h"
@@ -290,9 +293,8 @@ void applyTimeConfig(const AppConfig &cfg)
   configTzTime(timeZone.c_str(), cfg.ntpServer.c_str());
 }
 
-bool saveConfig(const AppConfig &cfg)
+static void writeConfigDocument(JsonDocument &doc, const AppConfig &cfg)
 {
-  JsonDocument doc;
   writeButtonConfig(doc["buttonSources"].to<JsonArray>(), cfg.buttonSources);
   writeMotionConfig(doc["motionSensors"].to<JsonArray>(), cfg.motionSensors);
   doc["espMotionEnabled"] = cfg.espMotionEnabled;
@@ -317,7 +319,12 @@ bool saveConfig(const AppConfig &cfg)
   doc["ntpServer"] = cfg.ntpServer;
   doc["gmtOffsetSec"] = cfg.gmtOffsetSec;
   doc["daylightOffsetSec"] = cfg.daylightOffsetSec;
+}
 
+bool saveConfig(const AppConfig &cfg)
+{
+  JsonDocument doc;
+  writeConfigDocument(doc, cfg);
   if (doc.overflowed()) {
     appLogf(APP_LOG_LEVEL, "Nicht genug Speicher fuer die Konfiguration");
     return false;
@@ -337,6 +344,191 @@ bool saveConfig(const AppConfig &cfg)
     LittleFS.remove("/config.tmp");
     return false;
   }
+  return true;
+}
+
+static void readConfigValues(JsonVariantConst doc, AppConfig &cfg)
+{
+  cfg.espMotionEnabled = doc["espMotionEnabled"] | true;
+  cfg.motionOffDelayMs = doc["motionOffDelayMs"] | cfg.motionOffDelayMs;
+  cfg.buttonShortOverrideMs = doc["buttonShortOverrideMs"] | cfg.buttonShortOverrideMs;
+  cfg.motionEventTimeoutMs = doc["motionEventTimeoutMs"] | cfg.motionEventTimeoutMs;
+  cfg.shellyPollIntervalMs = doc["shellyPollIntervalMs"] | cfg.shellyPollIntervalMs;
+  cfg.espMotionPin = doc["espMotionPin"] | cfg.espMotionPin;
+  cfg.espMotionLedPin = doc["espMotionLedPin"] | cfg.espMotionLedPin;
+  cfg.espMotionInvert = doc["espMotionInvert"] | cfg.espMotionInvert;
+  cfg.timeWindowEnabled = doc["timeWindowEnabled"] | cfg.timeWindowEnabled;
+  cfg.automationEnabled = doc["automationEnabled"] | cfg.automationEnabled;
+  cfg.motionStartMin = doc["motionStartMin"] | cfg.motionStartMin;
+  cfg.motionEndMin = doc["motionEndMin"] | cfg.motionEndMin;
+  cfg.windowUseSun = doc["windowUseSun"] | cfg.windowUseSun;
+  cfg.sunOnlineLookup = doc["sunOnlineLookup"] | cfg.sunOnlineLookup;
+  cfg.latitude = doc["latitude"] | cfg.latitude;
+  cfg.longitude = doc["longitude"] | cfg.longitude;
+  cfg.sunriseOffsetMin = doc["sunriseOffsetMin"] | cfg.sunriseOffsetMin;
+  cfg.sunsetOffsetMin = doc["sunsetOffsetMin"] | cfg.sunsetOffsetMin;
+  cfg.ntpServer = doc["ntpServer"] | cfg.ntpServer;
+  cfg.gmtOffsetSec = doc["gmtOffsetSec"] | cfg.gmtOffsetSec;
+  cfg.daylightOffsetSec = doc["daylightOffsetSec"] | cfg.daylightOffsetSec;
+}
+
+namespace {
+
+constexpr size_t MAX_CONFIG_BACKUP_BYTES = 64 * 1024;
+const char *BACKUP_NAMESPACE = "light-backup";
+const char *BACKUP_KEY = "config";
+
+bool parseConfigBackup(const String &payload, AppConfig &cfg, uint32_t &createdAt, String &error)
+{
+  JsonDocument envelope;
+  if (deserializeJson(envelope, payload.c_str()) || !envelope["version"].is<unsigned int>() ||
+      envelope["version"].as<unsigned int>() != 1 || !envelope["createdAt"].is<uint32_t>() ||
+      !envelope["config"].is<JsonObject>()) {
+    error = "Preferences-Sicherung ungueltig oder Version nicht unterstuetzt";
+    return false;
+  }
+  JsonVariantConst doc = envelope["config"];
+  if (!readButtonConfig(doc["buttonSources"], cfg.buttonSources, error) ||
+      !readMotionConfig(doc["motionSensors"], cfg.motionSensors, error) ||
+      !readLampConfig(doc["lamps"], cfg.lamps, error)) return false;
+
+  for (const char *key : {"espMotionEnabled", "espMotionInvert", "timeWindowEnabled",
+                         "automationEnabled", "windowUseSun", "sunOnlineLookup"}) {
+    if (!doc[key].is<bool>()) {
+      error = "Ungueltige Sicherung: " + String(key);
+      return false;
+    }
+  }
+  struct Range { const char *key; long minimum; long maximum; };
+  const Range ranges[] = {
+    {"motionOffDelayMs", 100, 600000}, {"buttonShortOverrideMs", 100, 600000},
+    {"motionEventTimeoutMs", 1000, 3600000}, {"shellyPollIntervalMs", 1000, 60000},
+    {"espMotionPin", 0, 39}, {"espMotionLedPin", 0, 39},
+    {"motionStartMin", 0, 1439}, {"motionEndMin", 0, 1439},
+    {"sunriseOffsetMin", -180, 180}, {"sunsetOffsetMin", -180, 180},
+    {"gmtOffsetSec", LONG_MIN, LONG_MAX}, {"daylightOffsetSec", INT_MIN, INT_MAX}
+  };
+  for (const Range &range : ranges) {
+    if (!doc[range.key].is<long>() || doc[range.key].as<long>() < range.minimum ||
+        doc[range.key].as<long>() > range.maximum) {
+      error = "Ungueltige Sicherung: " + String(range.key);
+      return false;
+    }
+  }
+  if (!doc["latitude"].is<double>() || !doc["longitude"].is<double>() ||
+      !isfinite(doc["latitude"].as<double>()) || !isfinite(doc["longitude"].as<double>()) ||
+      doc["latitude"].as<double>() < -90 || doc["latitude"].as<double>() > 90 ||
+      doc["longitude"].as<double>() < -180 || doc["longitude"].as<double>() > 180 ||
+      !doc["ntpServer"].is<String>() || doc["ntpServer"].as<String>().isEmpty()) {
+    error = "Ungueltige Sicherung: Standort oder NTP-Server";
+    return false;
+  }
+  readConfigValues(doc, cfg);
+  createdAt = envelope["createdAt"].as<uint32_t>();
+  return true;
+}
+
+bool readConfigBackup(String &payload, String &error)
+{
+  Preferences preferences;
+  if (!preferences.begin(BACKUP_NAMESPACE, false)) {
+    error = "Preferences konnten nicht geoeffnet werden";
+    return false;
+  }
+  if (!preferences.isKey(BACKUP_KEY)) {
+    preferences.end();
+    return true;
+  }
+  const size_t length = preferences.getBytesLength(BACKUP_KEY);
+  if (length == 0 || length > MAX_CONFIG_BACKUP_BYTES) {
+    preferences.end();
+    error = "Preferences-Sicherung hat eine ungueltige Groesse";
+    return false;
+  }
+  std::vector<char> buffer(length + 1, '\0');
+  const size_t read = preferences.getBytes(BACKUP_KEY, buffer.data(), length);
+  preferences.end();
+  if (read != length || strlen(buffer.data()) != length) {
+    error = "Preferences-Sicherung konnte nicht vollstaendig gelesen werden";
+    return false;
+  }
+  payload = buffer.data();
+  if (payload.length() != length) {
+    error = "Nicht genug Speicher zum Lesen der Preferences-Sicherung";
+    return false;
+  }
+  return true;
+}
+
+} // namespace
+
+bool getConfigBackupStatus(size_t &bytes, uint32_t &createdAt, String &error)
+{
+  bytes = 0;
+  createdAt = 0;
+  String payload;
+  if (!readConfigBackup(payload, error)) return false;
+  if (payload.isEmpty()) return true;
+  AppConfig parsed;
+  if (!parseConfigBackup(payload, parsed, createdAt, error)) return false;
+  bytes = payload.length();
+  return true;
+}
+
+bool backupConfigToPreferences(const AppConfig &cfg, String &error)
+{
+  JsonDocument config;
+  writeConfigDocument(config, cfg);
+  JsonDocument envelope;
+  envelope["version"] = 1;
+  const time_t now = time(nullptr);
+  envelope["createdAt"] = now > 1609459200 ? (uint32_t)now : 0;
+  envelope["config"] = config.as<JsonObjectConst>();
+  String payload;
+  const size_t expected = measureJson(envelope);
+  if (config.overflowed() || envelope.overflowed() || expected > MAX_CONFIG_BACKUP_BYTES ||
+      serializeJson(envelope, payload) != expected || payload.length() != expected) {
+    error = "Nicht genug Speicher fuer die Preferences-Sicherung";
+    return false;
+  }
+  AppConfig parsed;
+  uint32_t createdAt = 0;
+  if (!parseConfigBackup(payload, parsed, createdAt, error)) return false;
+  Preferences preferences;
+  if (!preferences.begin(BACKUP_NAMESPACE, false)) {
+    error = "Preferences konnten nicht geoeffnet werden";
+    return false;
+  }
+  // A single NVS value replaces the previous snapshot atomically.
+  const size_t written = preferences.putBytes(BACKUP_KEY, payload.c_str(), payload.length());
+  preferences.end();
+  String stored;
+  const bool verified = written == payload.length() && readConfigBackup(stored, error) && stored == payload;
+  if (!verified) {
+    error = "Preferences-Sicherung fehlgeschlagen: NVS-Speicher voll oder Schreib-/Lesefehler";
+    return false;
+  }
+  appLogf(APP_LOG_LEVEL, "Konfiguration in Preferences gesichert (%u Bytes)", (unsigned)payload.length());
+  return true;
+}
+
+bool restoreConfigFromPreferences(AppConfig &restored, String &error)
+{
+  String payload;
+  if (!readConfigBackup(payload, error)) return false;
+  if (payload.isEmpty()) {
+    error = "Keine Preferences-Sicherung vorhanden";
+    return false;
+  }
+  AppConfig candidate;
+  uint32_t createdAt = 0;
+  if (!parseConfigBackup(payload, candidate, createdAt, error)) return false;
+  if (!saveConfig(candidate)) {
+    error = "Sicherung konnte nicht nach LittleFS geschrieben werden";
+    return false;
+  }
+  restored = std::move(candidate);
+  appLogf(APP_LOG_LEVEL, "Konfiguration aus Preferences wiederhergestellt");
   return true;
 }
 
@@ -399,7 +591,6 @@ bool loadConfig(AppConfig &cfg)
       return false;
     }
   }
-  cfg.espMotionEnabled = doc["espMotionEnabled"] | true;
   const bool migrate = doc["lamps"].isUnbound();
   if (migrate) {
     cfg.lamps = legacyLamps(ip102, ip103, ip104,
@@ -412,26 +603,7 @@ bool loadConfig(AppConfig &cfg)
       return false;
     }
   }
-  cfg.motionOffDelayMs = doc["motionOffDelayMs"] | cfg.motionOffDelayMs;
-  cfg.buttonShortOverrideMs = doc["buttonShortOverrideMs"] | cfg.buttonShortOverrideMs;
-  cfg.motionEventTimeoutMs = doc["motionEventTimeoutMs"] | cfg.motionEventTimeoutMs;
-  cfg.shellyPollIntervalMs = doc["shellyPollIntervalMs"] | cfg.shellyPollIntervalMs;
-  cfg.espMotionPin = doc["espMotionPin"] | cfg.espMotionPin;
-  cfg.espMotionLedPin = doc["espMotionLedPin"] | cfg.espMotionLedPin;
-  cfg.espMotionInvert = doc["espMotionInvert"] | cfg.espMotionInvert;
-  cfg.timeWindowEnabled = doc["timeWindowEnabled"] | cfg.timeWindowEnabled;
-  cfg.automationEnabled = doc["automationEnabled"] | cfg.automationEnabled;
-  cfg.motionStartMin = doc["motionStartMin"] | cfg.motionStartMin;
-  cfg.motionEndMin = doc["motionEndMin"] | cfg.motionEndMin;
-  cfg.windowUseSun = doc["windowUseSun"] | cfg.windowUseSun;
-  cfg.sunOnlineLookup = doc["sunOnlineLookup"] | cfg.sunOnlineLookup;
-  cfg.latitude = doc["latitude"] | cfg.latitude;
-  cfg.longitude = doc["longitude"] | cfg.longitude;
-  cfg.sunriseOffsetMin = doc["sunriseOffsetMin"] | cfg.sunriseOffsetMin;
-  cfg.sunsetOffsetMin = doc["sunsetOffsetMin"] | cfg.sunsetOffsetMin;
-  cfg.ntpServer = doc["ntpServer"] | cfg.ntpServer;
-  cfg.gmtOffsetSec = doc["gmtOffsetSec"] | cfg.gmtOffsetSec;
-  cfg.daylightOffsetSec = doc["daylightOffsetSec"] | cfg.daylightOffsetSec;
+  readConfigValues(doc.as<JsonVariantConst>(), cfg);
   if (migrate || migrateMotion || migrateButtons) {
     appLogf(APP_LOG_LEVEL, "Konfiguration migriert: Lampen=%s, BWM=%s, Taster=%s",
             migrate ? "ja" : "nein", migrateMotion ? "ja" : "nein", migrateButtons ? "ja" : "nein");

@@ -18,6 +18,8 @@ let selection = null;
 let saving = false;
 let latestStatus;
 let statusLoading = false;
+let backupBusy = false;
+let backupAvailable = false;
 
 function itemKey(kind, item) {
   return kind === "button" ? item.ip : item.id;
@@ -137,6 +139,8 @@ function renderOverview() {
   q("motionList").prepend(makeItem("local", "", "Interner BWM",
     "", "motion", "esp"));
   q("generalBtn").disabled = false;
+  q("backupBtn").disabled = backupBusy;
+  q("restoreBtn").disabled = backupBusy || !backupAvailable;
   renderStatus();
 }
 
@@ -150,6 +154,10 @@ function newDevice(kind) {
 
 function renderRoute() {
   if (!config) return;
+  if (backupBusy) {
+    history.replaceState(null, "", "#overview");
+    return;
+  }
   if (saving) {
     history.replaceState(null, "", `#${selection.route}`);
     return;
@@ -184,8 +192,18 @@ function renderRoute() {
   q("overview").hidden = true;
   q("detail").hidden = false;
   q("detailTitle").textContent = isNew ? `${kind.title} erstellen` : original.name || kind.title;
-  q("detailHint").textContent = "Speichern uebernimmt nur diesen Eintrag. Abbrechen oder Zurueck verwirft die Aenderungen. Speichern initialisiert die Steuerung neu und fordert Lampen AUS an.";
+  q("detailHint").textContent = "Speichern schaltet Lampen AUS.";
   q("detailFields").replaceChildren(q(`${name}Template`).content.cloneNode(true));
+  const hints = q("detailFields").querySelectorAll("p.hint");
+  if (hints.length) {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    summary.textContent = "Hinweise";
+    details.append(summary, ...hints);
+    q("detailFields").append(details);
+  }
+  q("detailDiagnostics").open = false;
+  q("detailDiagnostics").hidden = !["lamp", "motion", "local"].includes(name);
   for (const input of q("detailFields").querySelectorAll("[name]")) {
     const value = original[input.name];
     if (input.type === "checkbox") input.checked = value;
@@ -195,6 +213,7 @@ function renderRoute() {
   }
   q("deleteBtn").hidden = !kind.list || isNew;
   q("detailStatus").textContent = "";
+  q("detailError").hidden = true;
   if (name === "button") {
     for (const type of ["short", "long"]) q("detailFields").querySelector(`[data-url="${type}"]`).value = `${location.origin}/api/event/button?type=${type}`;
   }
@@ -323,12 +342,19 @@ function renderStatus() {
   if (!selection) return;
   const { kind, original, isNew } = selection;
   let text = "";
+  let fault = "";
   if (kind === "lamp" || kind === "motion" || kind === "local") {
     const list = kind === "lamp" ? latestStatus.lamps : latestStatus.motionSensors;
     const state = list.find((item) => item.id === (kind === "local" ? "esp" : original.id));
     text = isNew ? "Noch nicht gespeichert." : state ? (kind === "lamp" ? lampStatusText(state) : motionStatusText(state)) : "Status noch nicht verfuegbar";
+    if (!isNew && state && state.enabled) {
+      if (kind === "lamp" && state.error && !state.pending) fault = lampStatusText(state);
+      if (kind !== "lamp" && (state.timedOut || state.pollHealthy === false)) fault = motionSummaryText(state, true);
+    }
   }
   q("detailStatus").textContent = text;
+  q("detailError").textContent = fault;
+  q("detailError").hidden = !fault;
   if (kind === "general" && latestStatus.sunrise && latestStatus.sunset) {
     q("sunHint").textContent = `Heute: Sonnenaufgang ${latestStatus.sunrise}, Sonnenuntergang ${latestStatus.sunset}`;
   }
@@ -349,11 +375,58 @@ async function loadStatus() {
   }
 }
 
+async function loadBackupStatus() {
+  try {
+    const status = await lampRequest("/api/config/backup");
+    backupAvailable = status.available;
+    q("backupStatus").textContent = status.available ?
+      `Gesichert${status.createdAt ? `: ${new Date(status.createdAt * 1000).toLocaleString("de-DE")}` : ""}` :
+      "Keine Sicherung vorhanden.";
+    q("backupStatus").className = "hint";
+  } catch (error) {
+    backupAvailable = false;
+    q("backupStatus").textContent = `Sicherung nicht abrufbar: ${error.message}`;
+    q("backupStatus").className = "hint err";
+  }
+  q("restoreBtn").disabled = backupBusy || !backupAvailable;
+}
+
+async function manageBackup(restore) {
+  if (backupBusy || saving || selection) return;
+  if (restore && !backupAvailable) return;
+  const prompt = restore ? "Aktuelle Konfiguration durch die Preferences-Sicherung ersetzen? Lampen werden AUS geschaltet." :
+    "Aktuelle Konfiguration in Preferences sichern? Eine vorhandene Sicherung wird ersetzt.";
+  if (!window.confirm(prompt)) return;
+  backupBusy = true;
+  for (const button of q("overview").querySelectorAll("button")) button.disabled = true;
+  try {
+    await lampRequest(restore ? "/api/config/restore" : "/api/config/backup", {});
+    if (restore) {
+      // Do not display stale configuration if the subsequent reload fails.
+      config = null;
+      try {
+        config = await lampRequest("/api/config");
+      } catch (error) {
+        throw new Error(`Wiederhergestellt, aber Ansicht konnte nicht geladen werden: ${error.message}. Seite neu laden.`);
+      }
+    }
+    notify(restore ? "Wiederhergestellt. Lampen werden AUS geschaltet." : "In Preferences gesichert.");
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    backupBusy = false;
+    if (config) renderOverview();
+    await loadBackupStatus();
+  }
+}
+
 async function initSettings() {
   for (const kind of ["button", "motion", "lamp"]) {
     q(`add${kind[0].toUpperCase() + kind.slice(1)}Btn`).addEventListener("click", () => { location.hash = `create/${kind}`; });
   }
   q("generalBtn").addEventListener("click", () => { location.hash = "general"; });
+  q("backupBtn").addEventListener("click", () => manageBackup(false));
+  q("restoreBtn").addEventListener("click", () => manageBackup(true));
   for (const id of ["backBtn", "cancelBtn"]) q(id).addEventListener("click", () => { location.hash = "overview"; });
   q("elementForm").addEventListener("submit", (event) => { event.preventDefault(); saveDetail(); });
   q("detailFields").addEventListener("input", updateDetailOptions);
@@ -361,7 +434,7 @@ async function initSettings() {
   q("deleteBtn").addEventListener("click", () => saveDetail(true));
   window.addEventListener("hashchange", renderRoute);
   window.addEventListener("beforeunload", (event) => {
-    if (selection && (saving || selection.isNew || !sameItem(readDetail(), selection.original))) {
+    if (backupBusy || (selection && (saving || selection.isNew || !sameItem(readDetail(), selection.original)))) {
       event.preventDefault();
       event.returnValue = "";
     }
@@ -371,6 +444,7 @@ async function initSettings() {
     notify("");
     renderOverview();
     renderRoute();
+    loadBackupStatus();
   } catch (error) {
     notify(`Einstellungen konnten nicht geladen werden: ${error.message}. Seite bitte neu laden.`, true);
   }

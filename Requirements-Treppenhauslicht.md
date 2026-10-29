@@ -29,6 +29,11 @@ Allgemeine Einstellungen fuer Zeiten, Polling und NTP stehen separat.
 
 ### AR-03 Persistente Konfiguration
 Alle Einstellungen muessen persistent in LittleFS als JSON gespeichert werden.
+Eine manuell ausgeloeste Sicherung der aktiven Konfiguration in ESP32-Preferences
+(NVS) muss ein reines LittleFS-Update ueberstehen. Wiederherstellung erfolgt
+ausschliesslich manuell nach Bestaetigung und Validierung; sie ersetzt die
+LittleFS-Konfiguration und initialisiert die Steuerung neu (Lampen AUS).
+Fehler und fehlende Sicherungen muessen explizit angezeigt werden.
 
 ## 4. Kommunikations-Anforderungen
 ### COM-01 Shelly-Eingaenge via RPC

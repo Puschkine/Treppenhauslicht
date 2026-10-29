@@ -111,6 +111,8 @@ private:
     uint32_t generation;
     uint32_t sequence;
     bool mandatory;
+    uint8_t retries;
+    unsigned long readyAtMs;
   };
   mutable std::mutex lampMutex;
   std::vector<LampState> lampStates;

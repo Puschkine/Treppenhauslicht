@@ -10,6 +10,19 @@
 
 namespace {
 
+std::mutex configMutex;
+
+void sendConfigError(AsyncWebServerRequest *request, int status, const String &error)
+{
+  appLogf(APP_LOG_LEVEL, "Konfiguration: %s", error.c_str());
+  JsonDocument doc;
+  doc["ok"] = false;
+  doc["error"] = error;
+  String payload;
+  serializeJson(doc, payload);
+  request->send(status, "application/json", payload);
+}
+
 bool parseBool(const String &value)
 {
   String v = value;
@@ -193,7 +206,54 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
   });
 
   server.on("/api/config", HTTP_GET, [&](AsyncWebServerRequest *request) {
+    std::lock_guard<std::mutex> lock(configMutex);
     request->send(200, "application/json", buildConfigJson(cfg));
+  });
+
+  server.on("/api/config/backup", HTTP_GET, [&](AsyncWebServerRequest *request) {
+    std::lock_guard<std::mutex> lock(configMutex);
+    size_t bytes = 0;
+    uint32_t createdAt = 0;
+    String error;
+    if (!getConfigBackupStatus(bytes, createdAt, error)) {
+      sendConfigError(request, 500, error);
+      return;
+    }
+    JsonDocument doc;
+    doc["available"] = bytes > 0;
+    doc["bytes"] = bytes;
+    doc["createdAt"] = createdAt;
+    String payload;
+    serializeJson(doc, payload);
+    request->send(200, "application/json", payload);
+  });
+
+  server.on("/api/config/backup", HTTP_POST, [&](AsyncWebServerRequest *request) {
+    std::lock_guard<std::mutex> lock(configMutex);
+    String error;
+    if (!backupConfigToPreferences(cfg, error)) {
+      sendConfigError(request, 500, error);
+      return;
+    }
+    request->send(200, "application/json", "{\"ok\":true}");
+  });
+
+  server.on("/api/config/restore", HTTP_POST, [&](AsyncWebServerRequest *request) {
+    std::lock_guard<std::mutex> lock(configMutex);
+    if (controller.lampCommandsBusy()) {
+      sendConfigError(request, 409, "Lampenbefehle laufen noch. Bitte erneut wiederherstellen.");
+      return;
+    }
+    AppConfig restored;
+    String error;
+    if (!restoreConfigFromPreferences(restored, error)) {
+      sendConfigError(request, 500, error);
+      return;
+    }
+    cfg = std::move(restored);
+    applyTimeConfig(cfg);
+    controller.onConfigUpdated();
+    request->send(200, "application/json", "{\"ok\":true}");
   });
 
   server.on(
@@ -226,6 +286,7 @@ void setupRoutes(AsyncWebServer &server, AppConfig &cfg, LightingController &con
           return;
         }
 
+        std::lock_guard<std::mutex> lock(configMutex);
         AppConfig updated = cfg;
         applyJsonConfig(doc, updated);
         if (!doc["buttonSources"].isUnbound()) {

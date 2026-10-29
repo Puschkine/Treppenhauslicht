@@ -72,4 +72,7 @@ bool readButtonConfig(JsonVariantConst value, std::vector<ButtonSourceConfig> &s
 void applyTimeConfig(const AppConfig &cfg);
 bool saveConfig(const AppConfig &cfg);
 bool loadConfig(AppConfig &cfg);
+bool getConfigBackupStatus(size_t &bytes, uint32_t &createdAt, String &error);
+bool backupConfigToPreferences(const AppConfig &cfg, String &error);
+bool restoreConfigFromPreferences(AppConfig &restored, String &error);
 String hhmmFromMinutes(uint16_t mins);

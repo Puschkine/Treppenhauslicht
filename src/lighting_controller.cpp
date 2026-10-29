@@ -625,7 +625,7 @@ void LightingController::resetLampCommands()
     if (!retained) {
       LampConfig target = old.config;
       target.id = "";
-      cleanup.push_back({target, false, 0, 0, true});
+      cleanup.push_back({target, false, 0, 0, true, 0, 0});
     }
   }
   lampCommands = std::move(cleanup);
@@ -647,10 +647,12 @@ void LightingController::queueLampCommand(LampState &lamp, bool on, bool mandato
     if (!command.mandatory && command.config.id == lamp.config.id && command.generation == lampGeneration) {
       command.on = on;
       command.sequence = lamp.sequence;
+      command.retries = 0;
+      command.readyAtMs = 0;
       return;
     }
   }
-  LampCommand command{lamp.config, on, lampGeneration, lamp.sequence, mandatory};
+  LampCommand command{lamp.config, on, lampGeneration, lamp.sequence, mandatory, 0, 0};
   lampCommands.push_back(command);
 }
 
@@ -660,8 +662,33 @@ void LightingController::processLampCommand()
   {
     std::lock_guard<std::mutex> lock(lampMutex);
     if (lampCommands.empty()) return;
-    command = lampCommands.front();
-    lampCommands.pop_front();
+    auto next = lampCommands.end();
+    const unsigned long now = millis();
+    for (auto candidate = lampCommands.begin(); candidate != lampCommands.end(); ++candidate) {
+      if (candidate->retries && isBeforeMillis(now, candidate->readyAtMs)) continue;
+      bool blocked = false;
+      // Mandatory OFF retries must finish before newer commands to the same target.
+      for (auto earlier = lampCommands.begin(); earlier != candidate; ++earlier) {
+        const bool sameLamp = earlier->config.id == candidate->config.id &&
+          earlier->generation == candidate->generation;
+        const bool cleanupTarget = earlier->config.id.isEmpty() &&
+          (earlier->config.offUrl == candidate->config.offUrl ||
+           earlier->config.offUrl == candidate->config.onUrl ||
+           earlier->config.onUrl == candidate->config.offUrl ||
+           earlier->config.onUrl == candidate->config.onUrl);
+        if (earlier->mandatory && (sameLamp || cleanupTarget)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) {
+        next = candidate;
+        break;
+      }
+    }
+    if (next == lampCommands.end()) return;
+    command = *next;
+    lampCommands.erase(next);
     lampCommandInFlight = true;
     if (command.config.buttonGuard) {
       hasShelly102Command = true;
@@ -673,17 +700,25 @@ void LightingController::processLampCommand()
   http.setConnectTimeout(700);
   http.setTimeout(700);
   http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
-  const int code = http.begin(url) ? http.GET() : HTTPC_ERROR_CONNECTION_REFUSED;
+  const bool started = http.begin(url);
+  const int code = started ? http.GET() : HTTPC_ERROR_CONNECTION_REFUSED;
   const bool ok = code >= 200 && code < 300;
+  const bool connectionError = started && (code == HTTPC_ERROR_CONNECTION_REFUSED ||
+    code == HTTPC_ERROR_SEND_HEADER_FAILED || code == HTTPC_ERROR_SEND_PAYLOAD_FAILED ||
+    code == HTTPC_ERROR_NOT_CONNECTED || code == HTTPC_ERROR_CONNECTION_LOST ||
+    code == HTTPC_ERROR_READ_TIMEOUT);
   String error;
   if (!ok) {
-    error = code > 0 ? "HTTP " + String(code) : HTTPClient::errorToString(code);
+    error = !started ? "HTTP-URL konnte nicht initialisiert werden" :
+      code > 0 ? "HTTP " + String(code) : HTTPClient::errorToString(code);
   }
   http.end();
+  unsigned long retryDelayMs = 0;
   {
     std::lock_guard<std::mutex> lock(lampMutex);
     lampCommandInFlight = false;
     if (command.config.buttonGuard) lastShelly102CommandMs = millis();
+    bool current = command.config.id.isEmpty();
     if (command.generation == lampGeneration) {
       for (LampState &lamp : lampStates) {
         if (lamp.config.id != command.config.id) continue;
@@ -691,13 +726,25 @@ void LightingController::processLampCommand()
         lamp.lastCommandOn = command.on;
         lamp.httpCode = code;
         lamp.error = error;
-        if (lamp.sequence == command.sequence) lamp.pending = false;
+        current = lamp.sequence == command.sequence;
+        if (current) lamp.pending = connectionError && command.retries < 2;
       }
+    }
+    if (connectionError && command.retries < 2 &&
+        (current || (command.mandatory && command.generation == lampGeneration))) {
+      retryDelayMs = command.retries == 0 ? 500 : 1500;
+      ++command.retries;
+      command.readyAtMs = millis() + retryDelayMs;
+      lampCommands.push_front(command);
     }
   }
   appLogf(APP_LOG_LEVEL, "Lampe %s: %s %s (HTTP %d)",
           command.config.name.c_str(), command.on ? "EIN" : "AUS",
           ok ? "gesendet" : error.c_str(), code);
+  if (retryDelayMs) {
+    appLogf(APP_LOG_LEVEL, "Lampe %s: Wiederholung %u/2 in %lu ms",
+            command.config.name.c_str(), command.retries, retryDelayMs);
+  }
 }
 
 bool LightingController::lampCommandsBusy() const

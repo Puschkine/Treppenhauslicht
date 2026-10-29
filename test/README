@@ -11,7 +11,7 @@ More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
 
 Lamp web regression tests (Node.js, no additional packages):
-  node --test test\web_lamps.test.cjs test\web_motion.test.cjs test\web_buttons.test.cjs test\web_settings.test.cjs
+  node --test test\web_lamps.test.cjs test\web_motion.test.cjs test\web_buttons.test.cjs test\web_settings.test.cjs test\web_backup.test.cjs
 
 These cover JavaScript syntax, command payloads, API error propagation,
 the distinction between sent commands and confirmed lamp state, and the
@@ -48,7 +48,9 @@ On-device checks after deployment:
 - Verify automation uses only enabled automation lamps; long push/global
   commands use all enabled lamps. Taster/BWM event endpoints stay unchanged.
 - Make one lamp unreachable: other commands must still be processed, with
-  errors visible in status and logs. Retry explicitly using EIN/AUS.
+  errors visible in status and logs. Connection failures retry at most twice
+  after 500 ms and another 1500 ms; HTTP error responses must not retry.
+  A newer OFF must cancel an old ON retry. Explicit EIN/AUS starts a new budget.
 - Verify the newest queued command wins, without suppressing startup AUS.
 - Remove, disable or change an enabled lamp: old OFF target is sent.
 - Invalid/duplicate IDs, invalid URLs, more than 32 lamps, and bodies above
@@ -84,3 +86,37 @@ Button source checks:
 - Guarded sources receive 409 during the existing protected-lamp command window;
   independent unguarded sources still work. Old Shelly 102 URLs stay valid.
 - The existing source=ui test bypass stays unchanged, including with an empty list.
+
+Native lamp retry tests (Windows, Python 3 and a C++11 compiler):
+  python test\run_lamp_retry.py g++
+  python test\run_lamp_retry.py C:\tools\zig.exe c++
+
+The runner compiles the actual controller queue/reset/dispatch methods and command
+structs, not a second implementation. Only HTTP, time, configuration and logging
+are simulated. It checks exact retry deadlines/budget, success/error state, HTTP
+non-retry cases, URL initialization errors, sibling progress, newer commands during
+delay/in-flight requests, mandatory startup ordering, configuration invalidation,
+removed-target cleanup, and millis rollover. It does not exercise real networking,
+ESP32 mutex scheduling or the hardware. The host target must use 32-bit unsigned
+long, matching ESP32; Windows x64 does so.
+
+Native configuration backup tests (same Windows compiler, installed ArduinoJson):
+  python test\run_config_backup.py g++
+  python test\run_config_backup.py C:\tools\zig.exe c++
+
+These compile the actual app_config header and implementation with real
+ArduinoJson and fake Preferences/LittleFS. They cover complete roundtrip,
+explicit empty lists, overwrite, absent/corrupt/unsupported snapshots, required
+fields/types/ranges, NVS open/read/write failures, LittleFS write/rename failures,
+and absence of automatic restoration. Real NVS capacity and power-loss behavior
+still need device validation.
+
+Preferences backup browser/device checks:
+- Help and technical status start collapsed; errors and lamp-OFF warning remain.
+- Missing backup disables restore. Backup does not switch lamps or persist drafts.
+- Replacing a backup and restoring require confirmation; cancel sends no POST.
+- Back up, install a different LittleFS config, restore, then reboot: every setting
+  must match the backup; normal saves and boot must not replace the NVS snapshot.
+- Restore while lamp commands are pending returns 409. Storage/validation failures
+  show errors and must not replace live configuration.
+- Firmware with these endpoints must be deployed before using the new controls.

@@ -84,6 +84,35 @@ bleiben erhalten, gleichzeitig geaenderte/entfernte Eintraege werden als Konflik
 gemeldet. Abbrechen und erneutes Oeffnen laedt dann den zuletzt gelesenen Stand.
 Speichern initialisiert wie bisher die Steuerung neu und fordert Lampen AUS an.
 Lampen-Tests sind nur fuer gespeicherte, aktivierte und unveraenderte Eintraege moeglich.
+Erklaerungen stehen in eingeklappten Hinweisen, technische Elementstatus unter
+Statusdetails. Feldnamen, Fehler und die Warnung vor Lampen AUS bleiben sichtbar.
+
+### Manuelle Konfigurationssicherung in Preferences
+- Unter System: In Preferences sichern / Wiederherstellen. Eine einzelne,
+  versionierte JSON-Sicherung liegt als NVS-Blob in `light-backup`, Key `config`.
+- Gesichert wird die vollstaendige aktuell aktive AppConfig, nicht ein Entwurf.
+  Sichern ersetzt die bisherige Sicherung nach Bestaetigung, ohne Lampen zu schalten.
+  NVS-Schreiben und anschliessendes Ruecklesen muessen erfolgreich sein.
+- Ein reines LittleFS-Update ersetzt NVS nicht. Vollstaendiges Flash-Loeschen oder
+  eine Aenderung der Partitionierung kann die Sicherung dagegen entfernen.
+  NVS hat begrenzten, mit anderen Komponenten geteilten Speicher: grosse
+  Konfigurationen koennen trotz des 64-KiB-Limits mit einem expliziten Fehler scheitern.
+- Wiederherstellung ausschliesslich manuell und nach Bestaetigung; kein Boot-Fallback.
+  Version, Pflichtfelder, Typen, Wertebereiche und Geraetelisten werden geprueft.
+  Erst nach erfolgreichem atomarem Schreiben nach LittleFS wird die aktive
+  Konfiguration ersetzt, Zeitkonfiguration angewendet und die Steuerung neu
+  initialisiert (Lampen AUS). Die Preferences-Sicherung bleibt erhalten.
+- Laufende/ausstehende Lampenbefehle verhindern Wiederherstellung mit HTTP 409.
+  Speicher-, Lese-, Validierungs- und Schreibfehler werden gemeldet und geloggt.
+- `GET /api/config/backup`: `{available, bytes, createdAt}`; createdAt ist Unixzeit
+  oder 0 bei noch unbekannter Uhrzeit. Keine Sicherung: available=false.
+  Beschaedigte oder nicht lesbare Sicherung: HTTP 500, kein Erfolgsergebnis.
+- `POST /api/config/backup`: aktive Konfiguration nach NVS sichern.
+- `POST /api/config/restore`: NVS-Sicherung validieren und wiederherstellen.
+  Beide POSTs antworten mit `{ok:true}` oder einem expliziten Fehler.
+  Die Endpunkte verwenden dieselbe lokale Zugriffsregel wie die vorhandene Config-API.
+
+### Parameter
 
 - Erlaubte Tasterquellen: Name, IPv4-Adresse, aktiviert, Rueckkopplungsschutz
 - Internen BWM verwenden ja/nein
@@ -123,8 +152,16 @@ Lampen-Tests sind nur fuer gespeicherte, aktivierte und unveraenderte Eintraege 
   pro loop-Durchlauf, je 700 ms Verbindungs-/Lesetimeout). Noch nicht begonnene
   Befehle derselben Lampe werden durch den neuesten Sollwert ersetzt.
   Startup-AUS wird immer ausgefuehrt, bevor ein spaeterer EIN-Befehl folgt.
-- Fehler einer Lampe verhindern keine weiteren Befehle. Es gibt keine automatische
-  Wiederholung; ein erneuter EIN-/AUS-Befehl kann manuell gesendet werden.
+- Verbindungsfehler (Verbindungsaufbau, Senden, Verbindungsabbruch und Lesetimeout)
+  werden hoechstens zweimal wiederholt: 500 ms nach dem ersten Fehler und
+  1500 ms nach dem zweiten. Die Wartezeiten blockieren keine anderen Lampen.
+  HTTP-Antworten wie 400/401/500 sowie URL-Initialisierungsfehler werden nicht wiederholt.
+  Ein neuer Sollwert ersetzt einen wartenden normalen Versuch samt Retry-Budget.
+  Ein inzwischen ueberholter laufender Versuch wird nicht erneut eingereiht.
+  Startup-AUS behaelt Vorrang vor EIN derselben Lampe, auch waehrend Wiederholungen.
+  Cleanup-AUS an alte Ziele wird ebenfalls begrenzt wiederholt.
+  Jeder Fehler und jede geplante Wiederholung werden geloggt. Waehrenddessen bleibt
+  der Befehl ausstehend; nach dem letzten Fehler bleibt die Fehlermeldung sichtbar.
 - Beim Speichern wird neu initialisiert und AUS angefordert. Entfernte, deaktivierte
   oder auf andere URLs umgestellte Lampen erhalten zuvor noch AUS an ihre alte URL.
   Solange Befehle laufen, wird Speichern mit HTTP 409 abgelehnt; danach erneut versuchen.
